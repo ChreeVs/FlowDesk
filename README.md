@@ -6,7 +6,8 @@ FlowDesk e una scrivania operativa per progetti: timeline eventi, task, note, li
 
 - React + TypeScript + Vite
 - Supabase come database relazionale
-- Modalita demo locale via `localStorage` quando le variabili Supabase non sono presenti
+- Login obbligatorio con Supabase Auth quando le variabili Supabase sono presenti
+- Modalita demo locale via `localStorage` solo quando Supabase non e configurato
 - Preferenze locali per tema e label esplicative
 
 ## Setup
@@ -43,7 +44,7 @@ Lo schema include:
 - `links`
 - `reminders`
 
-Le policy RLS in `supabase/schema.sql` sono aperte per un MVP single-user. Per produzione, restringile con autenticazione e ownership per utente.
+Le policy RLS in `supabase/schema.sql` richiedono utenti autenticati. Ogni progetto ha `user_id`; eventi, task, note, link e promemoria sono accessibili solo se collegati a un progetto dell'utente corrente.
 
 ## Funzioni
 
@@ -53,11 +54,11 @@ Le policy RLS in `supabase/schema.sql` sono aperte per un MVP single-user. Per p
 - Ricerca interna al progetto
 - Filtro task aperti/completati
 - Badge scadenze task
-- Header con menu, tab Progetti, Impostazioni, Come funziona e Casi d'Utilizzo
+- Header con menu, tab Progetti, Guida e Impostazioni
 - Switch tema chiaro/scuro
 - Label esplicative disattivabili dalle impostazioni
 - Footer applicativo
-- Modal login/registrazione con Supabase Auth quando Supabase e configurato
+- App privata con login/registrazione Supabase obbligatori
 
 ## Deploy su GitHub Pages
 
@@ -72,3 +73,9 @@ Il repository include `.github/workflows/deploy.yml`.
 5. Fai push su `main`.
 
 La workflow costruisce `dist`, imposta il base path del repository e pubblica GitHub Pages.
+
+## Aggiornare RLS su Supabase
+
+Quando modifichi `supabase/schema.sql`, rilancialo nel SQL editor Supabase.
+
+Se avevi creato dati prima di aggiungere `user_id`, quei record resteranno invisibili finche non vengono assegnati a un utente. Per un progetto nuovo, basta registrarsi nell'app e creare nuovi dati.

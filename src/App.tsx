@@ -4,11 +4,14 @@ import {
   HelpCircle,
   LaptopMinimal,
   LogIn,
+  LogOut,
   Menu,
   Settings,
   X,
 } from 'lucide-react'
+import type { Session } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
+import { AuthGate } from './components/AuthGate'
 import { AuthModal } from './components/AuthModal'
 import { dataMode } from './lib/repository'
 import {
@@ -16,8 +19,9 @@ import {
   savePreferences,
   type UserPreferences,
 } from './lib/preferences'
+import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { Dashboard } from './pages/Dashboard'
-import { HowItWorksPage, UseCasesPage } from './pages/InfoPages'
+import { GuidePage } from './pages/InfoPages'
 import { ProjectPage } from './pages/ProjectPage'
 import { SettingsPage } from './pages/SettingsPage'
 
@@ -30,22 +34,18 @@ type Route =
       id: string
     }
   | {
+      name: 'guide'
+    }
+  | {
       name: 'settings'
-    }
-  | {
-      name: 'how'
-    }
-  | {
-      name: 'use-cases'
     }
 
 type StaticRouteName = Exclude<Route['name'], 'project'>
 
 const routePaths: Record<StaticRouteName, string> = {
   projects: '/',
+  guide: '/guida',
   settings: '/impostazioni',
-  how: '/come-funziona',
-  'use-cases': '/casi-utilizzo',
 }
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '')
@@ -77,16 +77,16 @@ const readRoute = (): Route => {
     return { name: 'project', id: decodeURIComponent(match[1]) }
   }
 
+  if (
+    pathname === routePaths.guide ||
+    pathname === '/come-funziona' ||
+    pathname === '/casi-utilizzo'
+  ) {
+    return { name: 'guide' }
+  }
+
   if (pathname === routePaths.settings) {
     return { name: 'settings' }
-  }
-
-  if (pathname === routePaths.how) {
-    return { name: 'how' }
-  }
-
-  if (pathname === routePaths['use-cases']) {
-    return { name: 'use-cases' }
   }
 
   return { name: 'projects' }
@@ -95,6 +95,8 @@ const readRoute = (): Route => {
 function App() {
   const [route, setRoute] = useState<Route>(readRoute)
   const [preferences, setPreferences] = useState<UserPreferences>(readPreferences)
+  const [session, setSession] = useState<Session | null>(null)
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
   const [authOpen, setAuthOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -102,6 +104,26 @@ function App() {
     document.documentElement.dataset.theme = preferences.theme
     savePreferences(preferences)
   }, [preferences])
+
+  useEffect(() => {
+    if (!supabase) {
+      return
+    }
+
+    void supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setAuthReady(true)
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+      setAuthReady(true)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     const handlePopState = () => setRoute(readRoute())
@@ -124,8 +146,19 @@ function App() {
     setPreferences((current) => ({ ...current, ...patch }))
   }
 
+  const logout = async () => {
+    if (!supabase) {
+      return
+    }
+
+    await supabase.auth.signOut()
+    navigate({ name: 'projects' })
+  }
+
   const modeIcon =
     dataMode === 'Supabase' ? <Database size={15} /> : <LaptopMinimal size={15} />
+
+  const isLocked = isSupabaseConfigured && !session
 
   const renderPage = () => {
     if (route.name === 'projects') {
@@ -147,20 +180,16 @@ function App() {
       )
     }
 
-    if (route.name === 'settings') {
-      return (
-        <SettingsPage
-          preferences={preferences}
-          onUpdatePreferences={updatePreferences}
-        />
-      )
+    if (route.name === 'guide') {
+      return <GuidePage />
     }
 
-    if (route.name === 'how') {
-      return <HowItWorksPage />
-    }
-
-    return <UseCasesPage />
+    return (
+      <SettingsPage
+        preferences={preferences}
+        onUpdatePreferences={updatePreferences}
+      />
+    )
   }
 
   return (
@@ -196,20 +225,12 @@ function App() {
             Progetti
           </button>
           <button
-            className={`nav-tab ${route.name === 'how' ? 'active' : ''}`}
+            className={`nav-tab ${route.name === 'guide' ? 'active' : ''}`}
             type="button"
-            onClick={() => navigate({ name: 'how' })}
+            onClick={() => navigate({ name: 'guide' })}
           >
             <HelpCircle size={16} />
-            Come funziona
-          </button>
-          <button
-            className={`nav-tab ${route.name === 'use-cases' ? 'active' : ''}`}
-            type="button"
-            onClick={() => navigate({ name: 'use-cases' })}
-          >
-            <HelpCircle size={16} />
-            Casi d'Utilizzo
+            Guida
           </button>
           <button
             className={`nav-tab ${route.name === 'settings' ? 'active' : ''}`}
@@ -226,25 +247,54 @@ function App() {
             {modeIcon}
             {dataMode}
           </span>
-          <button
-            className="auth-button"
-            type="button"
-            onClick={() => setAuthOpen(true)}
-          >
-            <LogIn size={16} />
-            Login / Registrazione
-          </button>
+          {session ? (
+            <>
+              <span className="mode-pill account-pill">
+                {session.user.email ?? 'Account'}
+              </span>
+              <button
+                className="auth-button"
+                type="button"
+                onClick={() => void logout()}
+              >
+                <LogOut size={16} />
+                Esci
+              </button>
+            </>
+          ) : (
+            <button
+              className="auth-button"
+              type="button"
+              onClick={() => setAuthOpen(true)}
+            >
+              <LogIn size={16} />
+              Login / Registrazione
+            </button>
+          )}
         </div>
       </header>
 
-      <main>{renderPage()}</main>
+      <main>
+        <AuthGate
+          loading={!authReady}
+          locked={isLocked}
+          onLogin={() => setAuthOpen(true)}
+        >
+          {renderPage()}
+        </AuthGate>
+      </main>
 
       <footer className="app-footer">
         <span>FlowDesk</span>
         <span>Memoria operativa veloce per progetti, task e follow-up.</span>
       </footer>
 
-      {authOpen ? <AuthModal onClose={() => setAuthOpen(false)} /> : null}
+      {authOpen ? (
+        <AuthModal
+          onClose={() => setAuthOpen(false)}
+          onAuthenticated={() => setAuthOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }

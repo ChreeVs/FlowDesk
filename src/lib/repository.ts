@@ -75,6 +75,21 @@ const requireSupabase = () => {
   return supabase
 }
 
+const requireAuthenticatedUserId = async () => {
+  const client = requireSupabase()
+  const { data, error } = await client.auth.getUser()
+
+  if (error) {
+    throw error
+  }
+
+  if (!data.user) {
+    throw new Error('Login richiesto')
+  }
+
+  return data.user.id
+}
+
 const unwrap = async <T>(
   request: PromiseLike<{ data: T | null; error: unknown }>,
 ) => {
@@ -118,10 +133,12 @@ const supabaseRepository = {
   },
 
   async createProject(name: string): Promise<Project> {
+    const userId = await requireAuthenticatedUserId()
+
     return unwrap<Project>(
       requireSupabase()
         .from('projects')
-        .insert({ name })
+        .insert({ name, user_id: userId })
         .select()
         .single(),
     )

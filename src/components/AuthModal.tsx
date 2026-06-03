@@ -8,9 +8,10 @@ type AuthMode = 'login' | 'register'
 
 type AuthModalProps = {
   onClose: () => void
+  onAuthenticated?: () => void
 }
 
-export function AuthModal({ onClose }: AuthModalProps) {
+export function AuthModal({ onClose, onAuthenticated }: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -60,6 +61,10 @@ export function AuthModal({ onClose }: AuthModalProps) {
           ? 'Accesso effettuato.'
           : 'Registrazione inviata. Controlla la tua email se Supabase richiede conferma.',
       )
+
+      if (authResult.data.session) {
+        onAuthenticated?.()
+      }
     } catch (authError) {
       setMessage(getErrorMessage(authError))
     } finally {

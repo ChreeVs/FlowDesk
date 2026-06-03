@@ -11,16 +11,17 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-export function HowItWorksPage() {
+export function GuidePage() {
   return (
     <div className="page info-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Metodo</p>
-          <h1>Come funziona</h1>
+          <p className="eyebrow">Guida</p>
+          <h1>Come funziona e casi d'utilizzo</h1>
         </div>
       </div>
 
+      <h2 className="info-section-title">Come funziona</h2>
       <div className="info-grid">
         <InfoItem
           icon={<FileStack size={19} />}
@@ -43,20 +44,8 @@ export function HowItWorksPage() {
           text="Task, scadenze, reminder e link servono a non perdere contesto, non a creare gestione complessa."
         />
       </div>
-    </div>
-  )
-}
 
-export function UseCasesPage() {
-  return (
-    <div className="page info-page">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">Scenari</p>
-          <h1>Casi d'Utilizzo</h1>
-        </div>
-      </div>
-
+      <h2 className="info-section-title">Casi d'Utilizzo</h2>
       <div className="info-grid">
         <InfoItem
           icon={<BriefcaseBusiness size={19} />}

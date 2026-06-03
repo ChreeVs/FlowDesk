@@ -3,6 +3,7 @@ export type ReminderStatus = 'pending' | 'done'
 
 export type Project = {
   id: string
+  user_id?: string | null
   name: string
   created_at: string
 }
