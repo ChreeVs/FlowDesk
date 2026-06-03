@@ -78,11 +78,14 @@ const stripBasePath = (pathname: string) => {
   return pathname
 }
 
+const normalizePathname = (pathname: string) =>
+  pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+
 const withBasePath = (path: string) =>
   basePath ? `${basePath}${path}` : path
 
 const readRoute = (): Route => {
-  const pathname = stripBasePath(window.location.pathname)
+  const pathname = normalizePathname(stripBasePath(window.location.pathname))
   const match = pathname.match(/^\/projects\/([^/]+)$/)
 
   if (match?.[1]) {
