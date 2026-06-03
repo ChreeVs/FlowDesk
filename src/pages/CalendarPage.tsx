@@ -106,6 +106,7 @@ export function CalendarPage() {
   const [notes, setNotes] = useState<CalendarNoteSummary[]>([])
   const [modalDate, setModalDate] = useState<Date | null>(null)
   const [projectId, setProjectId] = useState('')
+  const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [label, setLabel] = useState(noteLabels[0])
   const [noteColor, setNoteColor] = useState(noteColors[0])
@@ -149,10 +150,11 @@ export function CalendarPage() {
     return map
   }, [notes])
 
-  const openModal = (date: Date, initialText = '') => {
+  const openModal = (date: Date, initialTitle = '') => {
     setModalDate(date)
     setScheduledAt(defaultDateInput(date))
-    setText(initialText)
+    setTitle(initialTitle)
+    setText('')
     setLabel(noteLabels[0])
     setNoteColor(noteColors[0])
   }
@@ -173,7 +175,7 @@ export function CalendarPage() {
   const addNote = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (!projectId || !text.trim() || !scheduledAt) {
+    if (!projectId || !title.trim() || !scheduledAt) {
       return
     }
 
@@ -183,6 +185,7 @@ export function CalendarPage() {
     try {
       const created = await repository.createCalendarNote({
         project_id: projectId,
+        title: title.trim(),
         text: text.trim(),
         label: label.trim().toUpperCase() || 'NOTE',
         color: noteColor,
@@ -196,6 +199,7 @@ export function CalendarPage() {
         ),
       )
       setModalDate(null)
+      setTitle('')
       setText('')
     } catch (createError) {
       setError(getErrorMessage(createError))
@@ -303,7 +307,7 @@ export function CalendarPage() {
                         {timeFormatter.format(new Date(note.scheduled_at))}
                       </span>
                       <strong style={{ color: note.color }}>{note.label}</strong>
-                      <small>{note.text}</small>
+                      <small title={note.text || note.title}>{note.title}</small>
                       <button
                         type="button"
                         title="Elimina nota"
@@ -414,16 +418,24 @@ export function CalendarPage() {
                 ))}
               </div>
               <label>
+                Nome nota
+                <input
+                  value={title}
+                  placeholder="Es. Brief homepage"
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </label>
+              <label>
                 Nota
                 <textarea
                   value={text}
-                  placeholder="Cosa va ricordato o pubblicato?"
+                  placeholder="Dettagli, contesto o appunti aggiuntivi"
                   onChange={(event) => setText(event.target.value)}
                 />
               </label>
               <button
                 type="submit"
-                disabled={saving || !projectId || !text.trim() || !scheduledAt}
+                disabled={saving || !projectId || !title.trim() || !scheduledAt}
               >
                 <FolderKanban size={16} />
                 {saving ? 'Salvataggio...' : 'Aggiungi nota'}

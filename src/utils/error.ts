@@ -5,10 +5,21 @@ export const getErrorMessage = (error: unknown) => {
     }
 
     if (
+      message.toLowerCase().includes('bucket not found') ||
+      message.toLowerCase().includes('bucket not_found')
+    ) {
+      return 'Bucket Storage non trovato. Esegui di nuovo supabase/schema.sql nel SQL Editor o crea i bucket project-assets e request-files da Supabase Storage.'
+    }
+
+    if (
       message.includes('schema cache') ||
+      message.includes("Could not find the 'title' column") ||
       message.includes("Could not find the 'label' column") ||
       message.includes("Could not find the 'color' column") ||
-      message.includes("Could not find the 'user_id' column")
+      message.includes("Could not find the 'user_id' column") ||
+      message.includes('relation "public.client_requests" does not exist') ||
+      message.includes('relation "public.request_links" does not exist') ||
+      message.includes('relation "public.notifications" does not exist')
     ) {
       return 'Schema Supabase non aggiornato. Esegui di nuovo supabase/schema.sql nel SQL Editor e poi riprova.'
     }

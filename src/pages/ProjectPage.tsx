@@ -4,26 +4,33 @@ import {
   Check,
   ChevronLeft,
   Circle,
+  Clipboard,
   Clock3,
   ExternalLink,
   FileText,
   History,
+  Inbox,
   Link as LinkIcon,
   ListTodo,
   Plus,
   Settings,
   Search,
+  Send,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { EditableText } from '../components/EditableText'
 import { Section } from '../components/Section'
+import { clientRequestTypeLabels } from '../data/clientRequests'
 import { repository } from '../lib/repository'
 import type {
+  ClientRequestSummary,
   ProjectBundle,
   ProjectEvent,
   ProjectLink,
+  ProjectRequestLink,
   Reminder,
   Task,
   TaskFilter,
@@ -80,6 +87,12 @@ const matches = (query: string, ...values: Array<string | null | undefined>) =>
   !query ||
   values.some((value) => value?.toLowerCase().includes(query.toLowerCase()))
 
+const clientRequestUrl = (token: string) =>
+  new URL(
+    `${import.meta.env.BASE_URL}richiesta/${encodeURIComponent(token)}`,
+    window.location.origin,
+  ).toString()
+
 export function ProjectPage({
   projectId,
   onBack,
@@ -100,6 +113,11 @@ export function ProjectPage({
   const [newReminder, setNewReminder] = useState('')
   const [newReminderAt, setNewReminderAt] = useState(defaultReminderInput)
   const [newReminderTaskId, setNewReminderTaskId] = useState('')
+  const [requestPanelOpen, setRequestPanelOpen] = useState(false)
+  const [requestLink, setRequestLink] = useState<ProjectRequestLink | null>(null)
+  const [clientRequests, setClientRequests] = useState<ClientRequestSummary[]>([])
+  const [requestLinkLoading, setRequestLinkLoading] = useState(false)
+  const [copiedRequestLink, setCopiedRequestLink] = useState(false)
 
   const [noteText, setNoteText] = useState('')
   const [noteState, setNoteState] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -116,6 +134,7 @@ export function ProjectPage({
       setNoteText(loadedNote)
       setNoteState('idle')
       setBundle(loaded)
+      setClientRequests(loaded.client_requests)
     } catch (loadError) {
       setError(getErrorMessage(loadError))
     } finally {
@@ -424,6 +443,43 @@ export function ProjectPage({
     }
   }
 
+  const openRequestPanel = async () => {
+    if (!bundle) {
+      return
+    }
+
+    setRequestPanelOpen(true)
+    setRequestLinkLoading(true)
+    setCopiedRequestLink(false)
+    setError(null)
+
+    try {
+      const [link, requests] = await Promise.all([
+        repository.getProjectRequestLink(bundle.project.id),
+        repository.listProjectClientRequests(bundle.project.id),
+      ])
+      setRequestLink(link)
+      setClientRequests(requests)
+    } catch (requestError) {
+      handleError(requestError)
+    } finally {
+      setRequestLinkLoading(false)
+    }
+  }
+
+  const copyRequestLink = async () => {
+    if (!requestLink) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(clientRequestUrl(requestLink.token))
+      setCopiedRequestLink(true)
+    } catch {
+      setCopiedRequestLink(false)
+    }
+  }
+
   const updateReminder = async (id: string, patch: Partial<Reminder>) => {
     try {
       const updated = await repository.updateReminder(id, patch)
@@ -494,6 +550,14 @@ export function ProjectPage({
         >
           <Settings size={16} />
           Impostazioni progetto
+        </button>
+        <button
+          className="back-button"
+          type="button"
+          onClick={() => void openRequestPanel()}
+        >
+          <Send size={16} />
+          Link richiesta
         </button>
       </div>
 
@@ -753,6 +817,83 @@ export function ProjectPage({
           </div>
         </Section>
       </div>
+
+      {requestPanelOpen ? (
+        <div className="modal-backdrop">
+          <div className="request-link-modal">
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">Richieste cliente</p>
+                <h2>Link pubblico del progetto</h2>
+              </div>
+              <button
+                className="icon-button ghost"
+                type="button"
+                title="Chiudi"
+                onClick={() => setRequestPanelOpen(false)}
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            {requestLinkLoading ? (
+              <div className="notice">Preparazione link...</div>
+            ) : requestLink ? (
+              <div className="request-link-box">
+                <input readOnly value={clientRequestUrl(requestLink.token)} />
+                <button type="button" onClick={() => void copyRequestLink()}>
+                  <Clipboard size={16} />
+                  {copiedRequestLink ? 'Copiato' : 'Copia'}
+                </button>
+              </div>
+            ) : null}
+
+            <div className="client-request-list">
+              <div className="section-heading">
+                <div>
+                  <Inbox size={18} />
+                  <h2>Ultime richieste</h2>
+                </div>
+                <span className="section-meta">{clientRequests.length}</span>
+              </div>
+
+              {clientRequests.length === 0 ? (
+                <div className="empty-state compact">
+                  <Inbox size={24} />
+                  <p>Nessuna richiesta ricevuta</p>
+                </div>
+              ) : (
+                clientRequests.map((request) => (
+                  <article className="client-request-item" key={request.id}>
+                    <div>
+                      <strong>{request.title}</strong>
+                      <small>
+                        {clientRequestTypeLabels[request.request_type]} - urgenza{' '}
+                        {request.urgency}/5 - {formatDateTime(request.created_at)}
+                      </small>
+                      {request.description ? <p>{request.description}</p> : null}
+                      {request.files.length > 0 ? (
+                        <div className="client-request-files">
+                          {request.files.map((file) => (
+                            <a
+                              href={file.file_url}
+                              key={file.id}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {file.file_name}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

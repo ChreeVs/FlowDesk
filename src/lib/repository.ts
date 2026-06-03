@@ -1,14 +1,21 @@
 import { isSupabaseConfigured, supabase } from './supabase'
 import type {
+  AppNotification,
   CalendarNote,
   CalendarNoteSummary,
+  ClientRequest,
+  ClientRequestFile,
+  ClientRequestSummary,
+  ClientRequestType,
   Note,
   Project,
   ProjectBundle,
   ProjectEvent,
   ProjectLink,
+  ProjectRequestLink,
   ProjectSettings,
   ProjectSummary,
+  PublicRequestForm,
   Reminder,
   ReminderStatus,
   SocialPost,
@@ -27,12 +34,18 @@ type ReminderPatch = Partial<
 type ProjectSettingsPatch = Omit<ProjectSettings, 'project_id' | 'updated_at'>
 type CalendarNotePatch = Pick<
   CalendarNote,
-  'project_id' | 'text' | 'label' | 'color' | 'scheduled_at'
+  'project_id' | 'title' | 'text' | 'label' | 'color' | 'scheduled_at'
 >
 type SocialPostPatch = Pick<
   SocialPost,
   'project_id' | 'text' | 'media_url' | 'platforms' | 'status' | 'scheduled_at'
 >
+type ClientRequestPatch = {
+  title: string
+  request_type: ClientRequestType
+  urgency: number
+  description: string
+}
 
 type LocalDb = {
   projects: Project[]
@@ -44,6 +57,10 @@ type LocalDb = {
   reminders: Reminder[]
   calendar_notes: CalendarNote[]
   social_posts: SocialPost[]
+  request_links: ProjectRequestLink[]
+  client_requests: ClientRequest[]
+  client_request_files: ClientRequestFile[]
+  notifications: AppNotification[]
 }
 
 const LOCAL_KEY = 'flowdesk-local-db-v1'
@@ -58,16 +75,42 @@ const emptyDb = (): LocalDb => ({
   reminders: [],
   calendar_notes: [],
   social_posts: [],
+  request_links: [],
+  client_requests: [],
+  client_request_files: [],
+  notifications: [],
 })
 
 const now = () => new Date().toISOString()
 const id = () => crypto.randomUUID()
 const LOGO_MAX_SIZE = 2 * 1024 * 1024
+const REQUEST_FILE_MAX_SIZE = 10 * 1024 * 1024
 const LOGO_BUCKET = 'project-assets'
+const REQUEST_FILE_BUCKET = 'request-files'
 const allowedLogoTypes = new Map([
   ['image/png', 'png'],
   ['image/jpeg', 'jpg'],
   ['image/webp', 'webp'],
+])
+const allowedRequestFileTypes = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/pdf',
+  'application/zip',
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+])
+const requestTypes = new Set<ClientRequestType>([
+  'modifica',
+  'nuovo_lavoro',
+  'bug',
+  'contenuto',
+  'grafica',
+  'altro',
 ])
 
 const readDb = (): LocalDb => {
@@ -125,6 +168,25 @@ const validateLogoFile = (file: File) => {
   }
 }
 
+const validateRequestFile = (file: File) => {
+  if (!allowedRequestFileTypes.has(file.type)) {
+    throw new Error(
+      'Allegato non valido. Usa immagini, PDF, ZIP, TXT, DOC/DOCX o XLS/XLSX.',
+    )
+  }
+
+  if (file.size > REQUEST_FILE_MAX_SIZE) {
+    throw new Error('Allegato troppo grande. Il limite e 10 MB per file.')
+  }
+}
+
+const safeFileName = (name: string) =>
+  name
+    .trim()
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 120) || 'allegato'
+
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -146,12 +208,42 @@ const summarizeCalendarNotes = (
 
     return {
       ...note,
+      title: note.title || note.text || 'Nota',
       label: note.label || 'FEED',
       color: note.color || '#2f8f56',
       project_name: project?.name ?? 'Progetto',
       project_color: projectSettings?.color ?? '#6b58d6',
     }
   })
+
+const summarizeClientRequests = (
+  requests: ClientRequest[],
+  projects: Project[],
+  files: ClientRequestFile[],
+): ClientRequestSummary[] =>
+  byNewest(requests).map((request) => {
+    const project = projects.find((item) => item.id === request.project_id)
+
+    return {
+      ...request,
+      project_name: project?.name ?? 'Progetto',
+      files: files.filter((file) => file.client_request_id === request.id),
+    }
+  })
+
+const validateClientRequestPatch = (patch: ClientRequestPatch) => {
+  if (!patch.title.trim()) {
+    throw new Error('Nome richiesta obbligatorio')
+  }
+
+  if (!requestTypes.has(patch.request_type)) {
+    throw new Error('Tipo richiesta non valido')
+  }
+
+  if (!Number.isInteger(patch.urgency) || patch.urgency < 0 || patch.urgency > 5) {
+    throw new Error('Urgenza non valida')
+  }
+}
 
 const summarizeSocialPosts = (
   posts: SocialPost[],
@@ -304,6 +396,46 @@ const supabaseRepository = {
           client.from('social_posts').select('*').eq('project_id', projectId),
         ),
       ])
+    let clientRequests: ClientRequest[] = []
+    let requestFiles: ClientRequestFile[] = []
+
+    try {
+      clientRequests = await unwrap<ClientRequest[]>(
+        client
+          .from('client_requests')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false }),
+      )
+      requestFiles =
+        clientRequests.length > 0
+          ? await unwrap<ClientRequestFile[]>(
+              client
+                .from('client_request_files')
+                .select('*')
+                .in(
+                  'client_request_id',
+                  clientRequests.map((request) => request.id),
+                ),
+            )
+          : []
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : typeof requestError === 'object' &&
+              requestError &&
+              'message' in requestError
+            ? String(requestError.message)
+            : ''
+
+      if (
+        !message.includes('client_requests') &&
+        !message.includes('client_request_files')
+      ) {
+        throw requestError
+      }
+    }
 
     return {
       project,
@@ -314,6 +446,11 @@ const supabaseRepository = {
       links,
       reminders,
       social_posts: socialPosts,
+      client_requests: summarizeClientRequests(
+        clientRequests,
+        [project],
+        requestFiles,
+      ),
     }
   },
 
@@ -361,6 +498,145 @@ const supabaseRepository = {
     }
 
     return client.storage.from(LOGO_BUCKET).getPublicUrl(path).data.publicUrl
+  },
+
+  async getProjectRequestLink(projectId: string): Promise<ProjectRequestLink> {
+    const client = requireSupabase()
+    const existing = await unwrap<ProjectRequestLink[]>(
+      client
+        .from('request_links')
+        .select('*')
+        .eq('project_id', projectId)
+        .limit(1),
+    )
+
+    if (existing[0]) {
+      return existing[0]
+    }
+
+    return unwrap<ProjectRequestLink>(
+      client
+        .from('request_links')
+        .insert({ project_id: projectId })
+        .select()
+        .single(),
+    )
+  },
+
+  async listProjectClientRequests(
+    projectId: string,
+  ): Promise<ClientRequestSummary[]> {
+    const client = requireSupabase()
+    const requests = await unwrap<ClientRequest[]>(
+      client
+        .from('client_requests')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false }),
+    )
+    const files =
+      requests.length > 0
+        ? await unwrap<ClientRequestFile[]>(
+            client
+              .from('client_request_files')
+              .select('*')
+              .in(
+                'client_request_id',
+                requests.map((request) => request.id),
+              ),
+          )
+        : []
+    const projects = await unwrap<Project[]>(
+      client.from('projects').select('*').eq('id', projectId),
+    )
+
+    return summarizeClientRequests(requests, projects, files)
+  },
+
+  async getPublicRequestForm(token: string): Promise<PublicRequestForm> {
+    return unwrap<PublicRequestForm>(
+      requireSupabase()
+        .rpc('get_public_request_link', { link_token: token })
+        .single(),
+    )
+  },
+
+  async submitPublicClientRequest(
+    token: string,
+    patch: ClientRequestPatch,
+  ): Promise<ClientRequest> {
+    validateClientRequestPatch(patch)
+
+    return unwrap<ClientRequest>(
+      requireSupabase()
+        .rpc('submit_public_client_request', {
+          link_token: token,
+          request_title: patch.title.trim(),
+          request_type_value: patch.request_type,
+          request_urgency: patch.urgency,
+          request_description: patch.description.trim(),
+        })
+        .single(),
+    )
+  },
+
+  async uploadClientRequestFile(
+    token: string,
+    requestId: string,
+    file: File,
+  ): Promise<ClientRequestFile> {
+    validateRequestFile(file)
+
+    const client = requireSupabase()
+    const path = `${token}/${requestId}/${id()}-${safeFileName(file.name)}`
+    const { error } = await client.storage
+      .from(REQUEST_FILE_BUCKET)
+      .upload(path, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: false,
+      })
+
+    if (error) {
+      throw error
+    }
+
+    const fileUrl = client.storage
+      .from(REQUEST_FILE_BUCKET)
+      .getPublicUrl(path).data.publicUrl
+
+    return unwrap<ClientRequestFile>(
+      client
+        .rpc('add_public_client_request_file', {
+          link_token: token,
+          request_id_value: requestId,
+          file_name_value: file.name,
+          file_url_value: fileUrl,
+          file_path_value: path,
+          file_size_value: file.size,
+          mime_type_value: file.type,
+        })
+        .single(),
+    )
+  },
+
+  async listNotifications(): Promise<AppNotification[]> {
+    return unwrap<AppNotification[]>(
+      requireSupabase()
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20),
+    )
+  },
+
+  async markNotificationRead(id: string): Promise<void> {
+    await ensure(
+      requireSupabase()
+        .from('notifications')
+        .update({ status: 'read' })
+        .eq('id', id),
+    )
   },
 
   async createEvent(projectId: string, text: string): Promise<ProjectEvent> {
@@ -655,6 +931,21 @@ const localRepository = {
     db.social_posts = db.social_posts.filter(
       (post) => post.project_id !== projectId,
     )
+    const requestIds = db.client_requests
+      .filter((request) => request.project_id === projectId)
+      .map((request) => request.id)
+    db.request_links = db.request_links.filter(
+      (link) => link.project_id !== projectId,
+    )
+    db.client_requests = db.client_requests.filter(
+      (request) => request.project_id !== projectId,
+    )
+    db.client_request_files = db.client_request_files.filter(
+      (file) => !requestIds.includes(file.client_request_id),
+    )
+    db.notifications = db.notifications.filter(
+      (notification) => notification.project_id !== projectId,
+    )
     writeDb(db)
   },
 
@@ -679,6 +970,11 @@ const localRepository = {
         (reminder) => reminder.project_id === projectId,
       ),
       social_posts: db.social_posts.filter((post) => post.project_id === projectId),
+      client_requests: summarizeClientRequests(
+        db.client_requests.filter((request) => request.project_id === projectId),
+        db.projects,
+        db.client_request_files,
+      ),
     }
   },
 
@@ -711,6 +1007,142 @@ const localRepository = {
     validateLogoFile(file)
 
     return readFileAsDataUrl(file)
+  },
+
+  async getProjectRequestLink(projectId: string): Promise<ProjectRequestLink> {
+    const db = readDb()
+    const existing = db.request_links.find((link) => link.project_id === projectId)
+
+    if (existing) {
+      return existing
+    }
+
+    const link = {
+      id: id(),
+      project_id: projectId,
+      token: id().replace(/-/g, ''),
+      is_enabled: true,
+      created_at: now(),
+    }
+    db.request_links.unshift(link)
+    writeDb(db)
+
+    return link
+  },
+
+  async listProjectClientRequests(
+    projectId: string,
+  ): Promise<ClientRequestSummary[]> {
+    const db = readDb()
+
+    return summarizeClientRequests(
+      db.client_requests.filter((request) => request.project_id === projectId),
+      db.projects,
+      db.client_request_files,
+    )
+  },
+
+  async getPublicRequestForm(token: string): Promise<PublicRequestForm> {
+    const db = readDb()
+    const link = db.request_links.find(
+      (item) => item.token === token && item.is_enabled,
+    )
+    const project = link
+      ? db.projects.find((item) => item.id === link.project_id)
+      : null
+
+    if (!link || !project) {
+      throw new Error('Link richiesta non valido o disattivato')
+    }
+
+    return { project_name: project.name }
+  },
+
+  async submitPublicClientRequest(
+    token: string,
+    patch: ClientRequestPatch,
+  ): Promise<ClientRequest> {
+    validateClientRequestPatch(patch)
+
+    const db = readDb()
+    const link = db.request_links.find(
+      (item) => item.token === token && item.is_enabled,
+    )
+    const project = link
+      ? db.projects.find((item) => item.id === link.project_id)
+      : null
+
+    if (!link || !project) {
+      throw new Error('Link richiesta non valido o disattivato')
+    }
+
+    const request = {
+      id: id(),
+      project_id: project.id,
+      request_link_id: link.id,
+      title: patch.title.trim(),
+      request_type: patch.request_type,
+      urgency: patch.urgency,
+      description: patch.description.trim(),
+      status: 'new' as const,
+      created_at: now(),
+    }
+    db.client_requests.unshift(request)
+    db.notifications.unshift({
+      id: id(),
+      user_id: project.user_id ?? 'local-user',
+      project_id: project.id,
+      title: `Nuova richiesta: ${request.title}`,
+      text: `Urgenza ${request.urgency}/5 - ${request.request_type}`,
+      status: 'unread',
+      source_type: 'client_request',
+      source_id: request.id,
+      created_at: now(),
+    })
+    writeDb(db)
+
+    return request
+  },
+
+  async uploadClientRequestFile(
+    _token: string,
+    requestId: string,
+    file: File,
+  ): Promise<ClientRequestFile> {
+    validateRequestFile(file)
+
+    const db = readDb()
+    const fileUrl = await readFileAsDataUrl(file)
+    const requestFile = {
+      id: id(),
+      client_request_id: requestId,
+      file_name: file.name,
+      file_url: fileUrl,
+      file_path: `local/${requestId}/${safeFileName(file.name)}`,
+      file_size: file.size,
+      mime_type: file.type,
+      created_at: now(),
+    }
+    db.client_request_files.unshift(requestFile)
+    writeDb(db)
+
+    return requestFile
+  },
+
+  async listNotifications(): Promise<AppNotification[]> {
+    const db = readDb()
+
+    return byNewest(db.notifications).slice(0, 20)
+  },
+
+  async markNotificationRead(notificationId: string): Promise<void> {
+    const db = readDb()
+    const notification = db.notifications.find((item) => item.id === notificationId)
+
+    if (notification) {
+      notification.status = 'read'
+      writeDb(db)
+    }
   },
 
   async createEvent(projectId: string, text: string): Promise<ProjectEvent> {

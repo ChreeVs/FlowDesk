@@ -633,6 +633,91 @@ main {
   font-weight: 760;
 }
 
+.public-request-shell {
+  min-height: 100svh;
+  background: var(--bg);
+}
+
+.public-request-header {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  width: min(780px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.public-request-page {
+  display: grid;
+  place-items: start center;
+  padding: 42px 16px 64px;
+}
+
+.public-request-card {
+  display: grid;
+  gap: 14px;
+  width: min(640px, 100%);
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.public-request-card > svg {
+  color: var(--accent-strong);
+}
+
+.public-request-card p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.public-request-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.public-request-form label,
+.request-file-control {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.public-request-form textarea {
+  min-height: 120px;
+}
+
+.request-file-control {
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.request-file-control span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+}
+
+.request-file-control small {
+  color: var(--faint);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.request-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .workspace-shell {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
@@ -888,6 +973,7 @@ main {
 }
 
 .workspace-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -925,6 +1011,55 @@ main {
   font-weight: 820;
   line-height: 15px;
   text-align: center;
+}
+
+.notifications-panel {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  z-index: 18;
+  display: grid;
+  gap: 8px;
+  width: min(340px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.notifications-panel > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notifications-panel > div button {
+  height: 30px;
+  padding: 0 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notifications-panel p,
+.notifications-panel article span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notifications-panel article {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.notifications-panel article.unread {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .mobile-sidebar-toggle {
@@ -1458,6 +1593,83 @@ button,
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+.request-link-modal {
+  display: grid;
+  gap: 14px;
+  width: min(680px, 100%);
+  max-height: min(760px, calc(100svh - 40px));
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.request-link-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.request-link-box button,
+.public-request-form button[type='submit'],
+.public-request-card > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 39px;
+  padding: 0 13px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 760;
+}
+
+.client-request-list {
+  display: grid;
+  gap: 10px;
+}
+
+.client-request-item {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.client-request-item strong,
+.client-request-item small {
+  display: block;
+}
+
+.client-request-item small,
+.client-request-item p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.client-request-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.client-request-files a,
+.request-file-list span {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
 }
 
 .back-button {

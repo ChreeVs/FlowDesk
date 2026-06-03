@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AuthGate } from './components/AuthGate'
 import { AuthModal } from './components/AuthModal'
 import { GuidedTour, type TourStep } from './components/GuidedTour'
@@ -30,6 +30,7 @@ import {
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { AdminPage } from './pages/AdminPage'
 import { CalendarPage } from './pages/CalendarPage'
+import { ClientRequestPage } from './pages/ClientRequestPage'
 import { Dashboard } from './pages/Dashboard'
 import { GuidePage } from './pages/InfoPages'
 import { LandingPage } from './pages/LandingPage'
@@ -38,7 +39,7 @@ import { ProjectPage } from './pages/ProjectPage'
 import { ProjectSettingsPage } from './pages/ProjectSettingsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SocialPlannerPage } from './pages/SocialPlannerPage'
-import type { ProjectSummary } from './types'
+import type { AppNotification, ProjectSummary } from './types'
 
 const TOUR_STORAGE_KEY = 'flowdesk-guided-tour-completed-v1'
 
@@ -109,13 +110,20 @@ type Route =
       id: string
     }
   | {
+      name: 'clientRequest'
+      token: string
+    }
+  | {
       name: 'guide'
     }
   | {
       name: 'settings'
     }
 
-type StaticRouteName = Exclude<Route['name'], 'project' | 'projectSettings'>
+type StaticRouteName = Exclude<
+  Route['name'],
+  'project' | 'projectSettings' | 'clientRequest'
+>
 
 const routePaths: Record<StaticRouteName, string> = {
   landing: '/',
@@ -154,8 +162,13 @@ const withBasePath = (path: string) =>
 
 const readRoute = (): Route => {
   const pathname = normalizePathname(stripBasePath(window.location.pathname))
+  const requestMatch = pathname.match(/^\/richiesta\/([^/]+)$/)
   const settingsMatch = pathname.match(/^\/projects\/([^/]+)\/settings$/)
   const match = pathname.match(/^\/projects\/([^/]+)$/)
+
+  if (requestMatch?.[1]) {
+    return { name: 'clientRequest', token: decodeURIComponent(requestMatch[1]) }
+  }
 
   if (settingsMatch?.[1]) {
     return { name: 'projectSettings', id: decodeURIComponent(settingsMatch[1]) }
@@ -219,6 +232,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false)
   const [sidebarProjects, setSidebarProjects] = useState<ProjectSummary[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [tourOpen, setTourOpen] = useState(false)
   const [tourDismissed, setTourDismissed] = useState(false)
 
@@ -260,11 +275,14 @@ function App() {
         ? `/projects/${encodeURIComponent(next.id)}`
         : next.name === 'projectSettings'
           ? `/projects/${encodeURIComponent(next.id)}/settings`
+        : next.name === 'clientRequest'
+          ? `/richiesta/${encodeURIComponent(next.token)}`
         : routePaths[next.name]
     window.history.pushState(null, '', withBasePath(routePath))
     setRoute(next)
     setSidebarOpen(false)
     setProjectSwitcherOpen(false)
+    setNotificationsOpen(false)
   }
 
   useEffect(() => {
@@ -274,7 +292,10 @@ function App() {
   }, [route.name, session])
 
   useEffect(() => {
-    const privateRouteOpen = route.name !== 'landing' && route.name !== 'pricing'
+    const privateRouteOpen =
+      route.name !== 'landing' &&
+      route.name !== 'pricing' &&
+      route.name !== 'clientRequest'
     const completed = localStorage.getItem(TOUR_STORAGE_KEY) === 'true'
 
     if (authReady && privateRouteOpen && !completed && !tourDismissed) {
@@ -285,7 +306,10 @@ function App() {
   }, [authReady, route.name, tourDismissed])
 
   useEffect(() => {
-    const isPublicRoute = route.name === 'landing' || route.name === 'pricing'
+    const isPublicRoute =
+      route.name === 'landing' ||
+      route.name === 'pricing' ||
+      route.name === 'clientRequest'
 
     if (isPublicRoute || (isSupabaseConfigured && !session)) {
       setSidebarProjects([])
@@ -314,6 +338,41 @@ function App() {
 
   const updatePreferences = (patch: Partial<UserPreferences>) => {
     setPreferences((current) => ({ ...current, ...patch }))
+  }
+
+  const loadNotifications = useCallback(async () => {
+    if (route.name === 'landing' || route.name === 'pricing' || route.name === 'clientRequest') {
+      setNotifications([])
+      return
+    }
+
+    if (isSupabaseConfigured && !session) {
+      setNotifications([])
+      return
+    }
+
+    try {
+      setNotifications(await repository.listNotifications())
+    } catch {
+      setNotifications([])
+    }
+  }, [route.name, session])
+
+  useEffect(() => {
+    void loadNotifications()
+  }, [loadNotifications])
+
+  const markNotificationsRead = async () => {
+    const unread = notifications.filter(
+      (notification) => notification.status === 'unread',
+    )
+
+    await Promise.all(
+      unread.map((notification) => repository.markNotificationRead(notification.id)),
+    )
+    setNotifications((current) =>
+      current.map((notification) => ({ ...notification, status: 'read' })),
+    )
   }
 
   const logout = async () => {
@@ -397,10 +456,18 @@ function App() {
     route.name === 'project' || route.name === 'projectSettings'
       ? sidebarProjects.find((project) => project.id === route.id)
       : null
+  const unreadNotifications = notifications.filter(
+    (notification) => notification.status === 'unread',
+  ).length
 
   return (
     <>
-      {route.name === 'landing' || (route.name === 'pricing' && !session) ? (
+      {route.name === 'clientRequest' ? (
+        <ClientRequestPage
+          token={route.token}
+          onBackHome={() => navigate({ name: 'landing' })}
+        />
+      ) : route.name === 'landing' || (route.name === 'pricing' && !session) ? (
         route.name === 'pricing' ? (
           <PricingPage
             isAuthenticated={Boolean(session)}
@@ -613,10 +680,46 @@ function App() {
                   type="button"
                   title="Notifiche"
                   data-tour="notifications"
+                  onClick={() => {
+                    void loadNotifications()
+                    setNotificationsOpen((open) => !open)
+                  }}
                 >
                   <Bell size={19} />
-                  <span>{sidebarProjects.length > 0 ? sidebarProjects.length : 0}</span>
+                  {unreadNotifications > 0 ? (
+                    <span>{unreadNotifications}</span>
+                  ) : null}
                 </button>
+                {notificationsOpen ? (
+                  <div className="notifications-panel">
+                    <div>
+                      <strong>Notifiche</strong>
+                      {unreadNotifications > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => void markNotificationsRead()}
+                        >
+                          Segna lette
+                        </button>
+                      ) : null}
+                    </div>
+                    {notifications.length === 0 ? (
+                      <p>Nessuna notifica</p>
+                    ) : (
+                      notifications.map((notification) => (
+                        <article
+                          className={
+                            notification.status === 'unread' ? 'unread' : ''
+                          }
+                          key={notification.id}
+                        >
+                          <strong>{notification.title}</strong>
+                          <span>{notification.text}</span>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
             <AuthGate

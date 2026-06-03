@@ -2,6 +2,15 @@ export type TaskStatus = 'todo' | 'done'
 export type ReminderStatus = 'pending' | 'done'
 export type SocialPlatform = 'facebook' | 'instagram'
 export type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed'
+export type ClientRequestType =
+  | 'modifica'
+  | 'nuovo_lavoro'
+  | 'bug'
+  | 'contenuto'
+  | 'grafica'
+  | 'altro'
+export type ClientRequestStatus = 'new' | 'reviewed' | 'done' | 'archived'
+export type NotificationStatus = 'unread' | 'read'
 
 export type Project = {
   id: string
@@ -73,6 +82,7 @@ export type ProjectSettings = {
 export type CalendarNote = {
   id: string
   project_id: string
+  title: string
   text: string
   label: string
   color: string
@@ -103,6 +113,58 @@ export type SocialPostSummary = SocialPost & {
   project_color: string
 }
 
+export type ProjectRequestLink = {
+  id: string
+  project_id: string
+  token: string
+  is_enabled: boolean
+  created_at: string
+}
+
+export type ClientRequestFile = {
+  id: string
+  client_request_id: string
+  file_name: string
+  file_url: string
+  file_path: string
+  file_size: number
+  mime_type: string
+  created_at: string
+}
+
+export type ClientRequest = {
+  id: string
+  project_id: string
+  request_link_id: string | null
+  title: string
+  request_type: ClientRequestType
+  urgency: number
+  description: string
+  status: ClientRequestStatus
+  created_at: string
+}
+
+export type ClientRequestSummary = ClientRequest & {
+  project_name: string
+  files: ClientRequestFile[]
+}
+
+export type PublicRequestForm = {
+  project_name: string
+}
+
+export type AppNotification = {
+  id: string
+  user_id: string
+  project_id: string | null
+  title: string
+  text: string
+  status: NotificationStatus
+  source_type: string | null
+  source_id: string | null
+  created_at: string
+}
+
 export type ProjectBundle = {
   project: Project
   settings: ProjectSettings | null
@@ -112,6 +174,7 @@ export type ProjectBundle = {
   links: ProjectLink[]
   reminders: Reminder[]
   social_posts: SocialPost[]
+  client_requests: ClientRequestSummary[]
 }
 
 export type TaskFilter = 'all' | 'todo' | 'done'

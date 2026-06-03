@@ -67,10 +67,56 @@ create table if not exists public.project_settings (
 create table if not exists public.calendar_notes (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
+  title text not null default 'Nota',
   text text not null,
   label text not null default 'FEED',
   color text not null default '#2f8f56',
   scheduled_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.request_links (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null unique references public.projects(id) on delete cascade,
+  token text not null unique default encode(gen_random_bytes(18), 'hex'),
+  is_enabled boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.client_requests (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  request_link_id uuid references public.request_links(id) on delete set null,
+  title text not null,
+  request_type text not null default 'modifica'
+    check (request_type in ('modifica', 'nuovo_lavoro', 'bug', 'contenuto', 'grafica', 'altro')),
+  urgency smallint not null default 0 check (urgency between 0 and 5),
+  description text not null default '',
+  status text not null default 'new'
+    check (status in ('new', 'reviewed', 'done', 'archived')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.client_request_files (
+  id uuid primary key default gen_random_uuid(),
+  client_request_id uuid not null references public.client_requests(id) on delete cascade,
+  file_name text not null,
+  file_url text not null,
+  file_path text not null,
+  file_size integer not null check (file_size <= 10485760),
+  mime_type text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete cascade,
+  title text not null,
+  text text not null default '',
+  status text not null default 'unread' check (status in ('unread', 'read')),
+  source_type text,
+  source_id uuid,
   created_at timestamptz not null default now()
 );
 
@@ -116,6 +162,9 @@ alter table public.projects
   add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
 alter table public.calendar_notes
+  add column if not exists title text not null default 'Nota';
+
+alter table public.calendar_notes
   add column if not exists label text not null default 'FEED';
 
 alter table public.calendar_notes
@@ -132,6 +181,31 @@ values (
   true,
   2097152,
   array['image/png', 'image/jpeg', 'image/webp']
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'request-files',
+  'request-files',
+  true,
+  10485760,
+  array[
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'application/pdf',
+    'application/zip',
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ]
 )
 on conflict (id) do update
 set
@@ -218,6 +292,185 @@ select projects.id
 from public.projects as projects
 on conflict (project_id) do nothing;
 
+create or replace function public.request_link_accepts_upload(link_token text)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.request_links
+    where token = link_token
+      and is_enabled = true
+  );
+$$;
+
+create or replace function public.get_public_request_link(link_token text)
+returns table(project_name text)
+language sql
+security definer
+set search_path = public
+as $$
+  select projects.name
+  from public.request_links
+  join public.projects on projects.id = request_links.project_id
+  where request_links.token = link_token
+    and request_links.is_enabled = true
+  limit 1;
+$$;
+
+create or replace function public.submit_public_client_request(
+  link_token text,
+  request_title text,
+  request_type_value text,
+  request_urgency integer,
+  request_description text default ''
+)
+returns setof public.client_requests
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_link public.request_links%rowtype;
+  target_project public.projects%rowtype;
+  inserted_request public.client_requests%rowtype;
+begin
+  if length(trim(coalesce(request_title, ''))) = 0 then
+    raise exception 'Nome richiesta obbligatorio';
+  end if;
+
+  if request_type_value not in ('modifica', 'nuovo_lavoro', 'bug', 'contenuto', 'grafica', 'altro') then
+    raise exception 'Tipo richiesta non valido';
+  end if;
+
+  if request_urgency < 0 or request_urgency > 5 then
+    raise exception 'Urgenza non valida';
+  end if;
+
+  select *
+  into target_link
+  from public.request_links
+  where token = link_token
+    and is_enabled = true
+  limit 1;
+
+  if target_link.id is null then
+    raise exception 'Link richiesta non valido o disattivato';
+  end if;
+
+  select *
+  into target_project
+  from public.projects
+  where id = target_link.project_id
+  limit 1;
+
+  if target_project.id is null or target_project.user_id is null then
+    raise exception 'Progetto non disponibile';
+  end if;
+
+  insert into public.client_requests(
+    project_id,
+    request_link_id,
+    title,
+    request_type,
+    urgency,
+    description
+  )
+  values (
+    target_project.id,
+    target_link.id,
+    trim(request_title),
+    request_type_value,
+    request_urgency,
+    trim(coalesce(request_description, ''))
+  )
+  returning * into inserted_request;
+
+  insert into public.notifications(
+    user_id,
+    project_id,
+    title,
+    text,
+    source_type,
+    source_id
+  )
+  values (
+    target_project.user_id,
+    target_project.id,
+    'Nuova richiesta: ' || inserted_request.title,
+    'Urgenza ' || inserted_request.urgency || '/5 - ' || inserted_request.request_type,
+    'client_request',
+    inserted_request.id
+  );
+
+  return next inserted_request;
+end;
+$$;
+
+create or replace function public.add_public_client_request_file(
+  link_token text,
+  request_id_value uuid,
+  file_name_value text,
+  file_url_value text,
+  file_path_value text,
+  file_size_value integer,
+  mime_type_value text
+)
+returns setof public.client_request_files
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_request public.client_requests%rowtype;
+  inserted_file public.client_request_files%rowtype;
+begin
+  select client_requests.*
+  into target_request
+  from public.client_requests
+  join public.request_links on request_links.id = client_requests.request_link_id
+  where client_requests.id = request_id_value
+    and request_links.token = link_token
+    and request_links.is_enabled = true
+  limit 1;
+
+  if target_request.id is null then
+    raise exception 'Richiesta non valida';
+  end if;
+
+  if file_size_value > 10485760 then
+    raise exception 'Allegato troppo grande';
+  end if;
+
+  insert into public.client_request_files(
+    client_request_id,
+    file_name,
+    file_url,
+    file_path,
+    file_size,
+    mime_type
+  )
+  values (
+    request_id_value,
+    file_name_value,
+    file_url_value,
+    file_path_value,
+    file_size_value,
+    mime_type_value
+  )
+  returning * into inserted_file;
+
+  return next inserted_file;
+end;
+$$;
+
+grant execute on function public.request_link_accepts_upload(text) to anon, authenticated;
+grant execute on function public.get_public_request_link(text) to anon, authenticated;
+grant execute on function public.submit_public_client_request(text, text, text, integer, text) to anon, authenticated;
+grant execute on function public.add_public_client_request_file(text, uuid, text, text, text, integer, text) to anon, authenticated;
+
 create index if not exists projects_user_created_idx
   on public.projects(user_id, created_at desc);
 
@@ -239,6 +492,21 @@ create index if not exists reminders_project_status_time_idx
 create index if not exists calendar_notes_project_time_idx
   on public.calendar_notes(project_id, scheduled_at);
 
+create index if not exists request_links_project_idx
+  on public.request_links(project_id);
+
+create index if not exists request_links_token_idx
+  on public.request_links(token);
+
+create index if not exists client_requests_project_created_idx
+  on public.client_requests(project_id, created_at desc);
+
+create index if not exists client_request_files_request_idx
+  on public.client_request_files(client_request_id, created_at desc);
+
+create index if not exists notifications_user_status_created_idx
+  on public.notifications(user_id, status, created_at desc);
+
 create index if not exists social_posts_project_time_idx
   on public.social_posts(project_id, scheduled_at);
 
@@ -253,6 +521,10 @@ alter table public.links enable row level security;
 alter table public.reminders enable row level security;
 alter table public.project_settings enable row level security;
 alter table public.calendar_notes enable row level security;
+alter table public.request_links enable row level security;
+alter table public.client_requests enable row level security;
+alter table public.client_request_files enable row level security;
+alter table public.notifications enable row level security;
 alter table public.social_posts enable row level security;
 alter table public.profiles enable row level security;
 alter table public.subscriptions enable row level security;
@@ -265,6 +537,10 @@ alter table public.links force row level security;
 alter table public.reminders force row level security;
 alter table public.project_settings force row level security;
 alter table public.calendar_notes force row level security;
+alter table public.request_links force row level security;
+alter table public.client_requests force row level security;
+alter table public.client_request_files force row level security;
+alter table public.notifications force row level security;
 alter table public.social_posts force row level security;
 alter table public.profiles force row level security;
 alter table public.subscriptions force row level security;
@@ -277,6 +553,10 @@ revoke all on public.links from anon;
 revoke all on public.reminders from anon;
 revoke all on public.project_settings from anon;
 revoke all on public.calendar_notes from anon;
+revoke all on public.request_links from anon;
+revoke all on public.client_requests from anon;
+revoke all on public.client_request_files from anon;
+revoke all on public.notifications from anon;
 revoke all on public.social_posts from anon;
 revoke all on public.profiles from anon;
 revoke all on public.subscriptions from anon;
@@ -290,6 +570,10 @@ grant select, insert, update, delete on public.links to authenticated;
 grant select, insert, update, delete on public.reminders to authenticated;
 grant select, insert, update, delete on public.project_settings to authenticated;
 grant select, insert, update, delete on public.calendar_notes to authenticated;
+grant select, insert, update, delete on public.request_links to authenticated;
+grant select, insert, update, delete on public.client_requests to authenticated;
+grant select, insert, update, delete on public.client_request_files to authenticated;
+grant select, update, delete on public.notifications to authenticated;
 grant select, insert, update, delete on public.social_posts to authenticated;
 grant select on public.profiles to authenticated;
 grant update (display_name) on public.profiles to authenticated;
@@ -303,6 +587,10 @@ drop policy if exists "single_user_all_links" on public.links;
 drop policy if exists "single_user_all_reminders" on public.reminders;
 drop policy if exists "project_settings_owned_by_project_user" on public.project_settings;
 drop policy if exists "calendar_notes_owned_by_project_user" on public.calendar_notes;
+drop policy if exists "request_links_owned_by_project_user" on public.request_links;
+drop policy if exists "client_requests_owned_by_project_user" on public.client_requests;
+drop policy if exists "client_request_files_owned_by_project_user" on public.client_request_files;
+drop policy if exists "notifications_owned_by_user" on public.notifications;
 drop policy if exists "social_posts_owned_by_project_user" on public.social_posts;
 drop policy if exists "profiles_owned_by_user" on public.profiles;
 drop policy if exists "profiles_update_own_display_name" on public.profiles;
@@ -346,6 +634,22 @@ create policy "project_assets_user_delete"
   using (
     bucket_id = 'project-assets'
     and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "request_files_public_read" on storage.objects;
+create policy "request_files_public_read"
+  on storage.objects
+  for select
+  using (bucket_id = 'request-files');
+
+drop policy if exists "request_files_public_insert" on storage.objects;
+create policy "request_files_public_insert"
+  on storage.objects
+  for insert
+  to anon, authenticated
+  with check (
+    bucket_id = 'request-files'
+    and public.request_link_accepts_upload((storage.foldername(name))[1])
   );
 
 drop policy if exists "projects_owned_by_user" on public.projects;
@@ -506,6 +810,82 @@ create policy "calendar_notes_owned_by_project_user"
         and projects.user_id = (select auth.uid())
     )
   );
+
+drop policy if exists "request_links_owned_by_project_user" on public.request_links;
+create policy "request_links_owned_by_project_user"
+  on public.request_links
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = request_links.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = request_links.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "client_requests_owned_by_project_user" on public.client_requests;
+create policy "client_requests_owned_by_project_user"
+  on public.client_requests
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = client_requests.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = client_requests.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "client_request_files_owned_by_project_user" on public.client_request_files;
+create policy "client_request_files_owned_by_project_user"
+  on public.client_request_files
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.client_requests
+      join public.projects on projects.id = client_requests.project_id
+      where client_requests.id = client_request_files.client_request_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.client_requests
+      join public.projects on projects.id = client_requests.project_id
+      where client_requests.id = client_request_files.client_request_id
+        and projects.user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "notifications_owned_by_user" on public.notifications;
+create policy "notifications_owned_by_user"
+  on public.notifications
+  for all
+  to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
 
 drop policy if exists "social_posts_owned_by_project_user" on public.social_posts;
 create policy "social_posts_owned_by_project_user"
