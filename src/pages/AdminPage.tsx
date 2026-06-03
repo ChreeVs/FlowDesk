@@ -187,6 +187,16 @@ export function AdminPage() {
       </p>
 
       {error ? <div className="notice error">{error}</div> : null}
+      {error?.includes('Funzione admin non raggiungibile') ? (
+        <div className="admin-setup-hint">
+          <strong>Setup richiesto</strong>
+          <span>
+            Pubblica la Edge Function <code>admin-users</code> e configura
+            <code> FLOWDESK_ADMIN_EMAILS</code>. La service role key resta solo nei
+            secret Supabase.
+          </span>
+        </div>
+      ) : null}
 
       <div className="dashboard-metrics">
         <article>

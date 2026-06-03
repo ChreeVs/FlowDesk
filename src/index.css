@@ -1729,6 +1729,55 @@ button,
   padding: 3px;
 }
 
+.logo-upload-control {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.logo-upload-control span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 760;
+}
+
+.logo-upload-control small {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.logo-upload-control input {
+  display: none;
+}
+
+.admin-setup-hint {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-setup-hint strong {
+  color: var(--text);
+}
+
+.admin-setup-hint code {
+  color: var(--text);
+  font-weight: 720;
+}
+
 .calendar-panel,
 .social-panel {
   display: grid;
@@ -2019,7 +2068,6 @@ button,
 }
 
 .calendar-chip strong {
-  color: #006b5a;
   font-size: 10px;
 }
 
@@ -2041,13 +2089,27 @@ button,
 }
 
 .calendar-idea {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--faint);
   font-size: 11px;
   line-height: 1.3;
+  text-align: left;
 }
 
 .calendar-idea::before {
   content: '• ';
+}
+
+.calendar-idea::before {
+  content: '* ';
+}
+
+.calendar-idea:hover {
+  color: var(--blue);
 }
 
 .calendar-note-modal {
@@ -2082,6 +2144,36 @@ button,
 
 .calendar-modal-form textarea {
   min-height: 110px;
+}
+
+.calendar-note-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  gap: 10px;
+}
+
+.calendar-note-options input[type='color'] {
+  min-height: 39px;
+  padding: 4px;
+}
+
+.calendar-color-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar-color-presets button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.calendar-color-presets button.active {
+  box-shadow: 0 0 0 2px var(--text);
 }
 
 .calendar-modal-form button[type='submit'] {

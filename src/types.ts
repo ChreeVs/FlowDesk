@@ -74,6 +74,8 @@ export type CalendarNote = {
   id: string
   project_id: string
   text: string
+  label: string
+  color: string
   scheduled_at: string
   created_at: string
 }

@@ -5,6 +5,7 @@ import {
   Link as LinkIcon,
   Palette,
   Save,
+  Upload,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -57,6 +58,20 @@ const toSettingsDraft = (settings: ProjectSettings | null): SettingsDraft => {
 const optionalUrl = (value: string) =>
   value.trim() ? normalizeUrl(value.trim()) : ''
 
+const optionalLogoUrl = (value: string | null) => {
+  const trimmed = value?.trim() ?? ''
+
+  if (!trimmed) {
+    return null
+  }
+
+  if (/^data:image\//i.test(trimmed)) {
+    return trimmed
+  }
+
+  return normalizeUrl(trimmed)
+}
+
 export function ProjectSettingsPage({
   projectId,
   onBack,
@@ -65,6 +80,7 @@ export function ProjectSettingsPage({
   const [draft, setDraft] = useState<SettingsDraft>(emptySettingsDraft)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -96,7 +112,7 @@ export function ProjectSettingsPage({
     try {
       const savedSettings = await repository.saveProjectSettings(projectId, {
         ...draft,
-        logo_url: draft.logo_url?.trim() ? optionalUrl(draft.logo_url) : null,
+        logo_url: optionalLogoUrl(draft.logo_url),
         website_url: optionalUrl(draft.website_url),
         facebook_url: optionalUrl(draft.facebook_url),
         instagram_url: optionalUrl(draft.instagram_url),
@@ -111,6 +127,25 @@ export function ProjectSettingsPage({
       setError(getErrorMessage(saveError))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const uploadLogo = async (file: File | null) => {
+    if (!file) {
+      return
+    }
+
+    setUploadingLogo(true)
+    setSaved(false)
+    setError(null)
+
+    try {
+      const logoUrl = await repository.uploadProjectLogo(projectId, file)
+      setDraft((current) => ({ ...current, logo_url: logoUrl }))
+    } catch (uploadError) {
+      setError(getErrorMessage(uploadError))
+    } finally {
+      setUploadingLogo(false)
     }
   }
 
@@ -186,6 +221,23 @@ export function ProjectSettingsPage({
               }))
             }
           />
+          <label className="logo-upload-control">
+            <span>
+              <Upload size={16} />
+              {uploadingLogo ? 'Caricamento logo...' : 'Carica logo'}
+            </span>
+            <small>PNG, JPG o WebP. Massimo 2 MB.</small>
+            <input
+              accept="image/png,image/jpeg,image/webp"
+              disabled={uploadingLogo}
+              type="file"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0] ?? null
+                event.currentTarget.value = ''
+                void uploadLogo(file)
+              }}
+            />
+          </label>
           <textarea
             value={draft.description}
             placeholder="Note, tono di voce, riferimenti visuali o dettagli utili"

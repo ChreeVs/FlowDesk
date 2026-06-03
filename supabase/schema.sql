@@ -68,6 +68,8 @@ create table if not exists public.calendar_notes (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
   text text not null,
+  label text not null default 'FEED',
+  color text not null default '#2f8f56',
   scheduled_at timestamptz not null,
   created_at timestamptz not null default now()
 );
@@ -113,9 +115,29 @@ create table if not exists public.subscriptions (
 alter table public.projects
   add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
+alter table public.calendar_notes
+  add column if not exists label text not null default 'FEED';
+
+alter table public.calendar_notes
+  add column if not exists color text not null default '#2f8f56';
+
 alter table public.profiles
   add column if not exists role text not null default 'user'
   check (role in ('user', 'admin'));
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'project-assets',
+  'project-assets',
+  true,
+  2097152,
+  array['image/png', 'image/jpeg', 'image/webp']
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -285,6 +307,46 @@ drop policy if exists "social_posts_owned_by_project_user" on public.social_post
 drop policy if exists "profiles_owned_by_user" on public.profiles;
 drop policy if exists "profiles_update_own_display_name" on public.profiles;
 drop policy if exists "subscriptions_owned_by_user" on public.subscriptions;
+
+drop policy if exists "project_assets_public_read" on storage.objects;
+create policy "project_assets_public_read"
+  on storage.objects
+  for select
+  using (bucket_id = 'project-assets');
+
+drop policy if exists "project_assets_user_insert" on storage.objects;
+create policy "project_assets_user_insert"
+  on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'project-assets'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "project_assets_user_update" on storage.objects;
+create policy "project_assets_user_update"
+  on storage.objects
+  for update
+  to authenticated
+  using (
+    bucket_id = 'project-assets'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  )
+  with check (
+    bucket_id = 'project-assets'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "project_assets_user_delete" on storage.objects;
+create policy "project_assets_user_delete"
+  on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'project-assets'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
 
 drop policy if exists "projects_owned_by_user" on public.projects;
 create policy "projects_owned_by_user"

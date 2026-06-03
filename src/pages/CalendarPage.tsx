@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import { getEditorialIdeas } from '../data/editorialCalendar'
 import { repository } from '../lib/repository'
 import type { CalendarNoteSummary, ProjectSummary } from '../types'
 import {
@@ -87,30 +88,15 @@ const getCalendarDays = (anchor: Date, view: CalendarView) => {
   })
 }
 
-const editorialIdeas = (date: Date) => {
-  const day = date.getDate()
-  const ideas: Record<number, string[]> = {
-    1: ['Inizio mese', 'Piano contenuti'],
-    3: ['Trend di settore'],
-    5: ['Aggiornamento cliente'],
-    8: ['Review asset'],
-    12: ['Idea carosello'],
-    15: ['Controllo metriche'],
-    18: ['Post educational'],
-    21: ['Recap settimana'],
-    24: ['Dietro le quinte'],
-    28: ['Piano prossimo mese'],
-  }
-
-  return ideas[day] ?? []
-}
-
 const defaultDateInput = (date: Date) => {
   const next = new Date(date)
   next.setHours(10, 0, 0, 0)
 
   return toDatetimeLocalValue(next.toISOString())
 }
+
+const noteLabels = ['FEED', 'STORY', 'REEL', 'POST', 'NOTE']
+const noteColors = ['#2f8f56', '#2d7c9f', '#7c5ce0', '#e07b39', '#d14d72']
 
 export function CalendarPage() {
   const today = useMemo(() => normalizeDay(new Date()), [])
@@ -121,6 +107,8 @@ export function CalendarPage() {
   const [modalDate, setModalDate] = useState<Date | null>(null)
   const [projectId, setProjectId] = useState('')
   const [text, setText] = useState('')
+  const [label, setLabel] = useState(noteLabels[0])
+  const [noteColor, setNoteColor] = useState(noteColors[0])
   const [scheduledAt, setScheduledAt] = useState(defaultDateInput(today))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -161,10 +149,12 @@ export function CalendarPage() {
     return map
   }, [notes])
 
-  const openModal = (date: Date) => {
+  const openModal = (date: Date, initialText = '') => {
     setModalDate(date)
     setScheduledAt(defaultDateInput(date))
-    setText('')
+    setText(initialText)
+    setLabel(noteLabels[0])
+    setNoteColor(noteColors[0])
   }
 
   const move = (direction: -1 | 1) => {
@@ -194,6 +184,8 @@ export function CalendarPage() {
       const created = await repository.createCalendarNote({
         project_id: projectId,
         text: text.trim(),
+        label: label.trim().toUpperCase() || 'NOTE',
+        color: noteColor,
         scheduled_at: fromDatetimeLocalValue(scheduledAt),
       })
       setNotes((current) =>
@@ -301,12 +293,16 @@ export function CalendarPage() {
 
                 <div className="calendar-day-content">
                   {dayNotes.map((note) => (
-                    <div className="calendar-chip" key={note.id}>
-                      <span>
+                    <div
+                      className="calendar-chip"
+                      key={note.id}
+                      style={{ borderColor: note.color }}
+                    >
+                      <span style={{ backgroundColor: note.color }}>
                         <Clock3 size={11} />
                         {timeFormatter.format(new Date(note.scheduled_at))}
                       </span>
-                      <strong>FEED</strong>
+                      <strong style={{ color: note.color }}>{note.label}</strong>
                       <small>{note.text}</small>
                       <button
                         type="button"
@@ -318,10 +314,15 @@ export function CalendarPage() {
                     </div>
                   ))}
 
-                  {editorialIdeas(date).map((idea) => (
-                    <p className="calendar-idea" key={idea}>
+                  {getEditorialIdeas(date).map((idea) => (
+                    <button
+                      className="calendar-idea"
+                      key={idea}
+                      type="button"
+                      onClick={() => openModal(date, idea)}
+                    >
                       {idea}
-                    </p>
+                    </button>
                   ))}
                 </div>
               </article>
@@ -377,6 +378,41 @@ export function CalendarPage() {
                   onChange={(event) => setScheduledAt(event.target.value)}
                 />
               </label>
+              <div className="calendar-note-options">
+                <label>
+                  Etichetta
+                  <select
+                    value={label}
+                    onChange={(event) => setLabel(event.target.value)}
+                  >
+                    {noteLabels.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Colore
+                  <input
+                    type="color"
+                    value={noteColor}
+                    onChange={(event) => setNoteColor(event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="calendar-color-presets">
+                {noteColors.map((color) => (
+                  <button
+                    aria-label={`Usa colore ${color}`}
+                    className={color === noteColor ? 'active' : ''}
+                    key={color}
+                    type="button"
+                    style={{ backgroundColor: color }}
+                    onClick={() => setNoteColor(color)}
+                  />
+                ))}
+              </div>
               <label>
                 Nota
                 <textarea

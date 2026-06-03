@@ -25,7 +25,10 @@ type ReminderPatch = Partial<
   Pick<Reminder, 'text' | 'remind_at' | 'status' | 'related_task_id'>
 >
 type ProjectSettingsPatch = Omit<ProjectSettings, 'project_id' | 'updated_at'>
-type CalendarNotePatch = Pick<CalendarNote, 'project_id' | 'text' | 'scheduled_at'>
+type CalendarNotePatch = Pick<
+  CalendarNote,
+  'project_id' | 'text' | 'label' | 'color' | 'scheduled_at'
+>
 type SocialPostPatch = Pick<
   SocialPost,
   'project_id' | 'text' | 'media_url' | 'platforms' | 'status' | 'scheduled_at'
@@ -59,6 +62,13 @@ const emptyDb = (): LocalDb => ({
 
 const now = () => new Date().toISOString()
 const id = () => crypto.randomUUID()
+const LOGO_MAX_SIZE = 2 * 1024 * 1024
+const LOGO_BUCKET = 'project-assets'
+const allowedLogoTypes = new Map([
+  ['image/png', 'png'],
+  ['image/jpeg', 'jpg'],
+  ['image/webp', 'webp'],
+])
 
 const readDb = (): LocalDb => {
   const raw = localStorage.getItem(LOCAL_KEY)
@@ -105,6 +115,24 @@ const defaultProjectSettings = (projectId: string): ProjectSettings => ({
   updated_at: now(),
 })
 
+const validateLogoFile = (file: File) => {
+  if (!allowedLogoTypes.has(file.type)) {
+    throw new Error('Logo non valido. Usa PNG, JPG o WebP.')
+  }
+
+  if (file.size > LOGO_MAX_SIZE) {
+    throw new Error('Logo troppo grande. Il limite e 2 MB.')
+  }
+}
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Impossibile leggere il file logo'))
+    reader.readAsDataURL(file)
+  })
+
 const summarizeCalendarNotes = (
   notes: CalendarNote[],
   projects: Project[],
@@ -118,6 +146,8 @@ const summarizeCalendarNotes = (
 
     return {
       ...note,
+      label: note.label || 'FEED',
+      color: note.color || '#2f8f56',
       project_name: project?.name ?? 'Progetto',
       project_color: projectSettings?.color ?? '#6b58d6',
     }
@@ -304,6 +334,33 @@ const supabaseRepository = {
         .select()
         .single(),
     )
+  },
+
+  async uploadProjectLogo(projectId: string, file: File): Promise<string> {
+    validateLogoFile(file)
+
+    const userId = await requireAuthenticatedUserId()
+    const extension = allowedLogoTypes.get(file.type)
+
+    if (!extension) {
+      throw new Error('Logo non valido. Usa PNG, JPG o WebP.')
+    }
+
+    const path = `${userId}/${projectId}/logo.${extension}`
+    const client = requireSupabase()
+    const { error } = await client.storage
+      .from(LOGO_BUCKET)
+      .upload(path, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: true,
+      })
+
+    if (error) {
+      throw error
+    }
+
+    return client.storage.from(LOGO_BUCKET).getPublicUrl(path).data.publicUrl
   },
 
   async createEvent(projectId: string, text: string): Promise<ProjectEvent> {
@@ -650,6 +707,12 @@ const localRepository = {
     return settings
   },
 
+  async uploadProjectLogo(_projectId: string, file: File): Promise<string> {
+    validateLogoFile(file)
+
+    return readFileAsDataUrl(file)
+  },
+
   async createEvent(projectId: string, text: string): Promise<ProjectEvent> {
     const db = readDb()
     const event = { id: id(), project_id: projectId, text, created_at: now() }
@@ -855,6 +918,8 @@ const localRepository = {
     const note = {
       id: id(),
       ...patch,
+      label: patch.label || 'FEED',
+      color: patch.color || '#2f8f56',
       created_at: now(),
     }
     db.calendar_notes.unshift(note)
