@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Database,
   FolderKanban,
+  Inbox,
   LaptopMinimal,
   LayoutDashboard,
   LogIn,
@@ -37,6 +38,7 @@ import { LandingPage } from './pages/LandingPage'
 import { PricingPage } from './pages/PricingPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { ProjectSettingsPage } from './pages/ProjectSettingsPage'
+import { RequestsPage } from './pages/RequestsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SocialPlannerPage } from './pages/SocialPlannerPage'
 import type { AppNotification, ProjectSummary } from './types'
@@ -61,6 +63,12 @@ const tourSteps: TourStep[] = [
     title: 'Calendario editoriale',
     description:
       'Usa il calendario per pianificare note operative e contenuti collegati a un progetto.',
+  },
+  {
+    selector: '[data-tour="requests"]',
+    title: 'Richieste clienti',
+    description:
+      'Qui gestisci le richieste arrivate dai link cliente: stato, note interne e file di lavoro.',
   },
   {
     selector: '[data-tour="social"]',
@@ -99,6 +107,9 @@ type Route =
       name: 'calendar'
     }
   | {
+      name: 'requests'
+    }
+  | {
       name: 'social'
     }
   | {
@@ -131,6 +142,7 @@ const routePaths: Record<StaticRouteName, string> = {
   pricing: '/pricing',
   admin: '/admin',
   calendar: '/calendario',
+  requests: '/richieste',
   social: '/social',
   guide: '/guida',
   settings: '/impostazioni',
@@ -192,6 +204,10 @@ const readRoute = (): Route => {
 
   if (pathname === routePaths.calendar || pathname === '/calendar') {
     return { name: 'calendar' }
+  }
+
+  if (pathname === routePaths.requests || pathname === '/requests') {
+    return { name: 'requests' }
   }
 
   if (pathname === routePaths.social || pathname === '/programmazione-social') {
@@ -438,6 +454,10 @@ function App() {
       return <CalendarPage />
     }
 
+    if (route.name === 'requests') {
+      return <RequestsPage />
+    }
+
     if (route.name === 'social') {
       return <SocialPlannerPage />
     }
@@ -581,6 +601,15 @@ function App() {
                 >
                   <CalendarDays size={16} />
                   Calendario
+                </button>
+                <button
+                  className={privateRoute.name === 'requests' ? 'active' : ''}
+                  type="button"
+                  data-tour="requests"
+                  onClick={() => navigate({ name: 'requests' })}
+                >
+                  <Inbox size={16} />
+                  Richieste
                 </button>
                 <button
                   className={privateRoute.name === 'social' ? 'active' : ''}

@@ -17,7 +17,9 @@ export const getErrorMessage = (error: unknown) => {
       message.includes("Could not find the 'label' column") ||
       message.includes("Could not find the 'color' column") ||
       message.includes("Could not find the 'user_id' column") ||
+      message.includes('client_requests_status_check') ||
       message.includes('relation "public.client_requests" does not exist') ||
+      message.includes('relation "public.client_request_updates" does not exist') ||
       message.includes('relation "public.request_links" does not exist') ||
       message.includes('relation "public.notifications" does not exist')
     ) {

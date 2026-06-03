@@ -1663,6 +1663,285 @@ button,
 
 .client-request-files a,
 .request-file-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.requests-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.42fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.requests-list-panel,
+.request-detail-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.requests-list {
+  display: grid;
+  gap: 8px;
+}
+
+.request-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 66px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+}
+
+.request-row:hover,
+.request-row.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.request-row strong,
+.request-row small {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+}
+
+.request-row strong {
+  overflow-wrap: anywhere;
+}
+
+.request-row small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.request-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.request-status-dot.pending,
+.status-pill.pending {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.request-status-dot.completed,
+.status-pill.completed {
+  background: #dff7e8;
+  color: #1f7a45;
+}
+
+.request-status-dot.rejected,
+.status-pill.rejected {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.request-status-dot.new,
+.status-pill.new {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.request-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.request-detail-heading h2 {
+  margin-top: 2px;
+  font-size: 27px;
+}
+
+.request-detail-heading span,
+.request-description p,
+.request-updates > p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.request-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.request-meta-row span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.request-description,
+.request-files-block,
+.request-updates {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.request-description h3,
+.request-files-block h3,
+.request-updates h3 {
+  font-size: 14px;
+}
+
+.request-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.request-status-actions button,
+.request-update-form button[type='submit'],
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  font-weight: 760;
+}
+
+.secondary-action {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.request-status-actions button.pending {
+  border-color: var(--warning-soft);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.request-status-actions button.completed {
+  border-color: #dff7e8;
+  background: #dff7e8;
+  color: #1f7a45;
+}
+
+.request-status-actions button.rejected {
+  border-color: var(--danger-soft);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.request-update-form {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.request-update-form textarea {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.file-input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 720;
+  overflow: hidden;
+}
+
+.file-input-row input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.request-update-form button[type='submit'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.request-update {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.request-update time {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.request-update p {
+  color: var(--text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.request-update a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
   padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2977,6 +3256,15 @@ button,
     grid-template-columns: 1fr;
   }
 
+  .requests-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .request-detail-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .info-grid {
     grid-template-columns: 1fr;
   }
@@ -3116,6 +3404,21 @@ button,
 
   .project-card {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .request-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .request-row .status-pill {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
+  .request-status-actions button,
+  .request-update-form button[type='submit'],
+  .secondary-action {
+    width: 100%;
   }
 
   .project-card .task-count {

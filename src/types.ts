@@ -9,7 +9,14 @@ export type ClientRequestType =
   | 'contenuto'
   | 'grafica'
   | 'altro'
-export type ClientRequestStatus = 'new' | 'reviewed' | 'done' | 'archived'
+export type ClientRequestStatus =
+  | 'new'
+  | 'pending'
+  | 'completed'
+  | 'rejected'
+  | 'reviewed'
+  | 'done'
+  | 'archived'
 export type NotificationStatus = 'unread' | 'read'
 
 export type Project = {
@@ -132,6 +139,19 @@ export type ClientRequestFile = {
   created_at: string
 }
 
+export type ClientRequestUpdate = {
+  id: string
+  client_request_id: string
+  user_id: string | null
+  text: string
+  file_name: string | null
+  file_url: string | null
+  file_path: string | null
+  file_size: number | null
+  mime_type: string | null
+  created_at: string
+}
+
 export type ClientRequest = {
   id: string
   project_id: string
@@ -147,6 +167,7 @@ export type ClientRequest = {
 export type ClientRequestSummary = ClientRequest & {
   project_name: string
   files: ClientRequestFile[]
+  updates: ClientRequestUpdate[]
 }
 
 export type PublicRequestForm = {

@@ -108,6 +108,19 @@ create table if not exists public.client_request_files (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.client_request_updates (
+  id uuid primary key default gen_random_uuid(),
+  client_request_id uuid not null references public.client_requests(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete set null,
+  text text not null default '',
+  file_name text,
+  file_url text,
+  file_path text,
+  file_size integer check (file_size is null or file_size <= 10485760),
+  mime_type text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -173,6 +186,13 @@ alter table public.calendar_notes
 alter table public.profiles
   add column if not exists role text not null default 'user'
   check (role in ('user', 'admin'));
+
+alter table public.client_requests
+  drop constraint if exists client_requests_status_check;
+
+alter table public.client_requests
+  add constraint client_requests_status_check
+  check (status in ('new', 'pending', 'completed', 'rejected', 'reviewed', 'done', 'archived'));
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
@@ -504,6 +524,9 @@ create index if not exists client_requests_project_created_idx
 create index if not exists client_request_files_request_idx
   on public.client_request_files(client_request_id, created_at desc);
 
+create index if not exists client_request_updates_request_created_idx
+  on public.client_request_updates(client_request_id, created_at desc);
+
 create index if not exists notifications_user_status_created_idx
   on public.notifications(user_id, status, created_at desc);
 
@@ -524,6 +547,7 @@ alter table public.calendar_notes enable row level security;
 alter table public.request_links enable row level security;
 alter table public.client_requests enable row level security;
 alter table public.client_request_files enable row level security;
+alter table public.client_request_updates enable row level security;
 alter table public.notifications enable row level security;
 alter table public.social_posts enable row level security;
 alter table public.profiles enable row level security;
@@ -540,6 +564,7 @@ alter table public.calendar_notes force row level security;
 alter table public.request_links force row level security;
 alter table public.client_requests force row level security;
 alter table public.client_request_files force row level security;
+alter table public.client_request_updates force row level security;
 alter table public.notifications force row level security;
 alter table public.social_posts force row level security;
 alter table public.profiles force row level security;
@@ -556,6 +581,7 @@ revoke all on public.calendar_notes from anon;
 revoke all on public.request_links from anon;
 revoke all on public.client_requests from anon;
 revoke all on public.client_request_files from anon;
+revoke all on public.client_request_updates from anon;
 revoke all on public.notifications from anon;
 revoke all on public.social_posts from anon;
 revoke all on public.profiles from anon;
@@ -573,6 +599,7 @@ grant select, insert, update, delete on public.calendar_notes to authenticated;
 grant select, insert, update, delete on public.request_links to authenticated;
 grant select, insert, update, delete on public.client_requests to authenticated;
 grant select, insert, update, delete on public.client_request_files to authenticated;
+grant select, insert, update, delete on public.client_request_updates to authenticated;
 grant select, update, delete on public.notifications to authenticated;
 grant select, insert, update, delete on public.social_posts to authenticated;
 grant select on public.profiles to authenticated;
@@ -590,6 +617,7 @@ drop policy if exists "calendar_notes_owned_by_project_user" on public.calendar_
 drop policy if exists "request_links_owned_by_project_user" on public.request_links;
 drop policy if exists "client_requests_owned_by_project_user" on public.client_requests;
 drop policy if exists "client_request_files_owned_by_project_user" on public.client_request_files;
+drop policy if exists "client_request_updates_owned_by_project_user" on public.client_request_updates;
 drop policy if exists "notifications_owned_by_user" on public.notifications;
 drop policy if exists "social_posts_owned_by_project_user" on public.social_posts;
 drop policy if exists "profiles_owned_by_user" on public.profiles;
@@ -650,6 +678,17 @@ create policy "request_files_public_insert"
   with check (
     bucket_id = 'request-files'
     and public.request_link_accepts_upload((storage.foldername(name))[1])
+  );
+
+drop policy if exists "request_files_user_insert" on storage.objects;
+create policy "request_files_user_insert"
+  on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'request-files'
+    and (storage.foldername(name))[1] = 'internal'
+    and (storage.foldername(name))[2] = (select auth.uid())::text
   );
 
 drop policy if exists "projects_owned_by_user" on public.projects;
@@ -876,6 +915,34 @@ create policy "client_request_files_owned_by_project_user"
       join public.projects on projects.id = client_requests.project_id
       where client_requests.id = client_request_files.client_request_id
         and projects.user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "client_request_updates_owned_by_project_user" on public.client_request_updates;
+create policy "client_request_updates_owned_by_project_user"
+  on public.client_request_updates
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.client_requests
+      join public.projects on projects.id = client_requests.project_id
+      where client_requests.id = client_request_updates.client_request_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.client_requests
+      join public.projects on projects.id = client_requests.project_id
+      where client_requests.id = client_request_updates.client_request_id
+        and projects.user_id = (select auth.uid())
+    )
+    and (
+      client_request_updates.user_id is null
+      or client_request_updates.user_id = (select auth.uid())
     )
   );
 

@@ -5,8 +5,10 @@ import type {
   CalendarNoteSummary,
   ClientRequest,
   ClientRequestFile,
+  ClientRequestStatus,
   ClientRequestSummary,
   ClientRequestType,
+  ClientRequestUpdate,
   Note,
   Project,
   ProjectBundle,
@@ -46,6 +48,10 @@ type ClientRequestPatch = {
   urgency: number
   description: string
 }
+type ClientRequestUpdatePatch = {
+  text: string
+  file: File | null
+}
 
 type LocalDb = {
   projects: Project[]
@@ -60,6 +66,7 @@ type LocalDb = {
   request_links: ProjectRequestLink[]
   client_requests: ClientRequest[]
   client_request_files: ClientRequestFile[]
+  client_request_updates: ClientRequestUpdate[]
   notifications: AppNotification[]
 }
 
@@ -78,6 +85,7 @@ const emptyDb = (): LocalDb => ({
   request_links: [],
   client_requests: [],
   client_request_files: [],
+  client_request_updates: [],
   notifications: [],
 })
 
@@ -220,6 +228,7 @@ const summarizeClientRequests = (
   requests: ClientRequest[],
   projects: Project[],
   files: ClientRequestFile[],
+  updates: ClientRequestUpdate[] = [],
 ): ClientRequestSummary[] =>
   byNewest(requests).map((request) => {
     const project = projects.find((item) => item.id === request.project_id)
@@ -228,6 +237,9 @@ const summarizeClientRequests = (
       ...request,
       project_name: project?.name ?? 'Progetto',
       files: files.filter((file) => file.client_request_id === request.id),
+      updates: byNewest(
+        updates.filter((update) => update.client_request_id === request.id),
+      ),
     }
   })
 
@@ -242,6 +254,16 @@ const validateClientRequestPatch = (patch: ClientRequestPatch) => {
 
   if (!Number.isInteger(patch.urgency) || patch.urgency < 0 || patch.urgency > 5) {
     throw new Error('Urgenza non valida')
+  }
+}
+
+const validateClientRequestUpdatePatch = (patch: ClientRequestUpdatePatch) => {
+  if (!patch.text.trim() && !patch.file) {
+    throw new Error('Inserisci un testo o un file per salvare la gestione')
+  }
+
+  if (patch.file) {
+    validateRequestFile(patch.file)
   }
 }
 
@@ -398,6 +420,7 @@ const supabaseRepository = {
       ])
     let clientRequests: ClientRequest[] = []
     let requestFiles: ClientRequestFile[] = []
+    let requestUpdates: ClientRequestUpdate[] = []
 
     try {
       clientRequests = await unwrap<ClientRequest[]>(
@@ -419,6 +442,18 @@ const supabaseRepository = {
                 ),
             )
           : []
+      requestUpdates =
+        clientRequests.length > 0
+          ? await unwrap<ClientRequestUpdate[]>(
+              client
+                .from('client_request_updates')
+                .select('*')
+                .in(
+                  'client_request_id',
+                  clientRequests.map((request) => request.id),
+                ),
+            )
+          : []
     } catch (requestError) {
       const message =
         requestError instanceof Error
@@ -431,7 +466,8 @@ const supabaseRepository = {
 
       if (
         !message.includes('client_requests') &&
-        !message.includes('client_request_files')
+        !message.includes('client_request_files') &&
+        !message.includes('client_request_updates')
       ) {
         throw requestError
       }
@@ -450,6 +486,7 @@ const supabaseRepository = {
         clientRequests,
         [project],
         requestFiles,
+        requestUpdates,
       ),
     }
   },
@@ -546,11 +583,129 @@ const supabaseRepository = {
               ),
           )
         : []
+    const updates =
+      requests.length > 0
+        ? await unwrap<ClientRequestUpdate[]>(
+            client
+              .from('client_request_updates')
+              .select('*')
+              .in(
+                'client_request_id',
+                requests.map((request) => request.id),
+              ),
+          )
+        : []
     const projects = await unwrap<Project[]>(
       client.from('projects').select('*').eq('id', projectId),
     )
 
-    return summarizeClientRequests(requests, projects, files)
+    return summarizeClientRequests(requests, projects, files, updates)
+  },
+
+  async listClientRequests(): Promise<ClientRequestSummary[]> {
+    const client = requireSupabase()
+    const [requests, projects] = await Promise.all([
+      unwrap<ClientRequest[]>(
+        client
+          .from('client_requests')
+          .select('*')
+          .order('created_at', { ascending: false }),
+      ),
+      unwrap<Project[]>(client.from('projects').select('*')),
+    ])
+    const requestIds = requests.map((request) => request.id)
+    const [files, updates] =
+      requestIds.length > 0
+        ? await Promise.all([
+            unwrap<ClientRequestFile[]>(
+              client
+                .from('client_request_files')
+                .select('*')
+                .in('client_request_id', requestIds),
+            ),
+            unwrap<ClientRequestUpdate[]>(
+              client
+                .from('client_request_updates')
+                .select('*')
+                .in('client_request_id', requestIds),
+            ),
+          ])
+        : [[], []]
+
+    return summarizeClientRequests(requests, projects, files, updates)
+  },
+
+  async updateClientRequestStatus(
+    requestId: string,
+    status: ClientRequestStatus,
+  ): Promise<ClientRequest> {
+    return unwrap<ClientRequest>(
+      requireSupabase()
+        .from('client_requests')
+        .update({ status })
+        .eq('id', requestId)
+        .select()
+        .single(),
+    )
+  },
+
+  async createClientRequestUpdate(
+    requestId: string,
+    patch: ClientRequestUpdatePatch,
+  ): Promise<ClientRequestUpdate> {
+    validateClientRequestUpdatePatch(patch)
+
+    const client = requireSupabase()
+    const userId = await requireAuthenticatedUserId()
+    let fileMeta: Pick<
+      ClientRequestUpdate,
+      'file_name' | 'file_url' | 'file_path' | 'file_size' | 'mime_type'
+    > = {
+      file_name: null,
+      file_url: null,
+      file_path: null,
+      file_size: null,
+      mime_type: null,
+    }
+
+    if (patch.file) {
+      const path = `internal/${userId}/${requestId}/${id()}-${safeFileName(
+        patch.file.name,
+      )}`
+      const { error } = await client.storage
+        .from(REQUEST_FILE_BUCKET)
+        .upload(path, patch.file, {
+          cacheControl: '3600',
+          contentType: patch.file.type,
+          upsert: false,
+        })
+
+      if (error) {
+        throw error
+      }
+
+      fileMeta = {
+        file_name: patch.file.name,
+        file_url: client.storage.from(REQUEST_FILE_BUCKET).getPublicUrl(path).data
+          .publicUrl,
+        file_path: path,
+        file_size: patch.file.size,
+        mime_type: patch.file.type,
+      }
+    }
+
+    return unwrap<ClientRequestUpdate>(
+      client
+        .from('client_request_updates')
+        .insert({
+          client_request_id: requestId,
+          user_id: userId,
+          text: patch.text.trim(),
+          ...fileMeta,
+        })
+        .select()
+        .single(),
+    )
   },
 
   async getPublicRequestForm(token: string): Promise<PublicRequestForm> {
@@ -943,6 +1098,9 @@ const localRepository = {
     db.client_request_files = db.client_request_files.filter(
       (file) => !requestIds.includes(file.client_request_id),
     )
+    db.client_request_updates = db.client_request_updates.filter(
+      (update) => !requestIds.includes(update.client_request_id),
+    )
     db.notifications = db.notifications.filter(
       (notification) => notification.project_id !== projectId,
     )
@@ -974,6 +1132,7 @@ const localRepository = {
         db.client_requests.filter((request) => request.project_id === projectId),
         db.projects,
         db.client_request_files,
+        db.client_request_updates,
       ),
     }
   },
@@ -1039,7 +1198,70 @@ const localRepository = {
       db.client_requests.filter((request) => request.project_id === projectId),
       db.projects,
       db.client_request_files,
+      db.client_request_updates,
     )
+  },
+
+  async listClientRequests(): Promise<ClientRequestSummary[]> {
+    const db = readDb()
+
+    return summarizeClientRequests(
+      db.client_requests,
+      db.projects,
+      db.client_request_files,
+      db.client_request_updates,
+    )
+  },
+
+  async updateClientRequestStatus(
+    requestId: string,
+    status: ClientRequestStatus,
+  ): Promise<ClientRequest> {
+    const db = readDb()
+    const request = db.client_requests.find((item) => item.id === requestId)
+
+    if (!request) {
+      throw new Error('Richiesta non trovata')
+    }
+
+    request.status = status
+    writeDb(db)
+
+    return request
+  },
+
+  async createClientRequestUpdate(
+    requestId: string,
+    patch: ClientRequestUpdatePatch,
+  ): Promise<ClientRequestUpdate> {
+    validateClientRequestUpdatePatch(patch)
+
+    const db = readDb()
+    const request = db.client_requests.find((item) => item.id === requestId)
+
+    if (!request) {
+      throw new Error('Richiesta non trovata')
+    }
+
+    const fileUrl = patch.file ? await readFileAsDataUrl(patch.file) : null
+    const update = {
+      id: id(),
+      client_request_id: requestId,
+      user_id: 'local-user',
+      text: patch.text.trim(),
+      file_name: patch.file?.name ?? null,
+      file_url: fileUrl,
+      file_path: patch.file
+        ? `local/internal/${requestId}/${safeFileName(patch.file.name)}`
+        : null,
+      file_size: patch.file?.size ?? null,
+      mime_type: patch.file?.type ?? null,
+      created_at: now(),
+    }
+    db.client_request_updates.unshift(update)
+    writeDb(db)
+
+    return update
   },
 
   async getPublicRequestForm(token: string): Promise<PublicRequestForm> {
