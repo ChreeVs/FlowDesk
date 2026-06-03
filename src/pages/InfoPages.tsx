@@ -11,7 +11,11 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-export function GuidePage() {
+type GuidePageProps = {
+  onStartDemo: () => void
+}
+
+export function GuidePage({ onStartDemo }: GuidePageProps) {
   return (
     <div className="page info-page">
       <div className="page-header">
@@ -19,6 +23,9 @@ export function GuidePage() {
           <p className="eyebrow">Guida</p>
           <h1>Come funziona e casi d'utilizzo</h1>
         </div>
+        <button className="text-button" type="button" onClick={onStartDemo}>
+          Avvia demo interattiva
+        </button>
       </div>
 
       <h2 className="info-section-title">Come funziona</h2>

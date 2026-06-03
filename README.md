@@ -51,8 +51,10 @@ Le policy RLS in `supabase/schema.sql` richiedono utenti autenticati. Ogni proge
 - Dashboard con lista progetti, creazione e conteggio task aperti
 - Project page con timeline eventi, task, note autosave, link e reminders
 - Impostazioni progetto con logo, colore, note, sito e link social
+- Pagina dedicata per le impostazioni di ogni progetto
 - Calendario operativo su `/calendario`
 - Programmazione post Facebook/Instagram su `/social`
+- Demo/tutorial interattivo con spotlight, avviabile dalla Guida e mostrato al primo accesso
 - CRUD per tutte le entita principali
 - Ricerca interna al progetto
 - Filtro task aperti/completati

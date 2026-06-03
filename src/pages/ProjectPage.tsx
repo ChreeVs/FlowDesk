@@ -7,14 +7,11 @@ import {
   Clock3,
   ExternalLink,
   FileText,
-  Globe2,
   History,
-  Image,
   Link as LinkIcon,
   ListTodo,
-  Palette,
   Plus,
-  Save,
+  Settings,
   Search,
   Trash2,
 } from 'lucide-react'
@@ -27,7 +24,6 @@ import type {
   ProjectBundle,
   ProjectEvent,
   ProjectLink,
-  ProjectSettings,
   Reminder,
   Task,
   TaskFilter,
@@ -44,6 +40,7 @@ import { normalizeUrl } from '../utils/url'
 type ProjectPageProps = {
   projectId: string
   onBack: () => void
+  onOpenSettings: () => void
   showHints: boolean
 }
 
@@ -83,46 +80,12 @@ const matches = (query: string, ...values: Array<string | null | undefined>) =>
   !query ||
   values.some((value) => value?.toLowerCase().includes(query.toLowerCase()))
 
-type SettingsDraft = Omit<ProjectSettings, 'project_id' | 'updated_at'>
-
-const emptySettingsDraft = (): SettingsDraft => ({
-  logo_url: null,
-  color: '#6b58d6',
-  description: '',
-  website_url: '',
-  facebook_url: '',
-  instagram_url: '',
-  linkedin_url: '',
-  x_url: '',
-  youtube_url: '',
-  drive_url: '',
-})
-
-const toSettingsDraft = (settings: ProjectSettings | null): SettingsDraft => {
-  const defaults = emptySettingsDraft()
-
-  if (!settings) {
-    return defaults
-  }
-
-  return {
-    logo_url: settings.logo_url,
-    color: settings.color,
-    description: settings.description,
-    website_url: settings.website_url,
-    facebook_url: settings.facebook_url,
-    instagram_url: settings.instagram_url,
-    linkedin_url: settings.linkedin_url,
-    x_url: settings.x_url,
-    youtube_url: settings.youtube_url,
-    drive_url: settings.drive_url,
-  }
-}
-
-const optionalUrl = (value: string) =>
-  value.trim() ? normalizeUrl(value.trim()) : ''
-
-export function ProjectPage({ projectId, onBack, showHints }: ProjectPageProps) {
+export function ProjectPage({
+  projectId,
+  onBack,
+  onOpenSettings,
+  showHints,
+}: ProjectPageProps) {
   const [bundle, setBundle] = useState<ProjectBundle | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -141,12 +104,6 @@ export function ProjectPage({ projectId, onBack, showHints }: ProjectPageProps) 
   const [noteText, setNoteText] = useState('')
   const [noteState, setNoteState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const lastSavedNote = useRef('')
-  const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>(
-    emptySettingsDraft,
-  )
-  const [settingsState, setSettingsState] = useState<
-    'idle' | 'saving' | 'saved'
-  >('idle')
 
   const loadProject = useCallback(async () => {
     setLoading(true)
@@ -158,8 +115,6 @@ export function ProjectPage({ projectId, onBack, showHints }: ProjectPageProps) 
       lastSavedNote.current = loadedNote
       setNoteText(loadedNote)
       setNoteState('idle')
-      setSettingsDraft(toSettingsDraft(loaded.settings))
-      setSettingsState('idle')
       setBundle(loaded)
     } catch (loadError) {
       setError(getErrorMessage(loadError))
@@ -251,7 +206,7 @@ export function ProjectPage({ projectId, onBack, showHints }: ProjectPageProps) 
   const pendingReminders = (bundle?.reminders ?? []).filter(
     (reminder) => reminder.status === 'pending',
   )
-  const projectColor = bundle?.settings?.color ?? settingsDraft.color
+  const projectColor = bundle?.settings?.color ?? '#6b58d6'
 
   const patchBundle = (patcher: (current: ProjectBundle) => ProjectBundle) => {
     setBundle((current) => (current ? patcher(current) : current))
@@ -271,38 +226,6 @@ export function ProjectPage({ projectId, onBack, showHints }: ProjectPageProps) 
       patchBundle((current) => ({ ...current, project }))
     } catch (renameError) {
       handleError(renameError)
-    }
-  }
-
-  const saveProjectSettings = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-
-    if (!bundle) {
-      return
-    }
-
-    setSettingsState('saving')
-
-    try {
-      const saved = await repository.saveProjectSettings(bundle.project.id, {
-        ...settingsDraft,
-        logo_url: settingsDraft.logo_url?.trim()
-          ? optionalUrl(settingsDraft.logo_url)
-          : null,
-        website_url: optionalUrl(settingsDraft.website_url),
-        facebook_url: optionalUrl(settingsDraft.facebook_url),
-        instagram_url: optionalUrl(settingsDraft.instagram_url),
-        linkedin_url: optionalUrl(settingsDraft.linkedin_url),
-        x_url: optionalUrl(settingsDraft.x_url),
-        youtube_url: optionalUrl(settingsDraft.youtube_url),
-        drive_url: optionalUrl(settingsDraft.drive_url),
-      })
-      setSettingsDraft(toSettingsDraft(saved))
-      setSettingsState('saved')
-      patchBundle((current) => ({ ...current, settings: saved }))
-    } catch (saveError) {
-      setSettingsState('idle')
-      handleError(saveError)
     }
   }
 
@@ -563,6 +486,15 @@ export function ProjectPage({ projectId, onBack, showHints }: ProjectPageProps) 
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
+
+        <button
+          className="back-button"
+          type="button"
+          onClick={onOpenSettings}
+        >
+          <Settings size={16} />
+          Impostazioni progetto
+        </button>
       </div>
 
       <div className="page-header project-header">
@@ -723,159 +655,6 @@ export function ProjectPage({ projectId, onBack, showHints }: ProjectPageProps) 
               Svuota
             </button>
           </div>
-        </Section>
-
-        <Section
-          title="Impostazioni progetto"
-          icon={<Palette size={18} />}
-          meta={
-            settingsState === 'saving'
-              ? 'Salvataggio'
-              : settingsState === 'saved'
-                ? 'Salvato'
-                : null
-          }
-          hint={
-            showHints
-              ? 'Personalizza identita, riferimenti e link utili del progetto.'
-              : null
-          }
-        >
-          <form className="project-settings-form" onSubmit={saveProjectSettings}>
-            <div className="settings-preview">
-              <span
-                className="project-logo large"
-                style={{ backgroundColor: settingsDraft.color }}
-              >
-                {settingsDraft.logo_url ? (
-                  <img src={settingsDraft.logo_url} alt="" />
-                ) : (
-                  <Image size={20} />
-                )}
-              </span>
-              <label>
-                <span>Colore</span>
-                <input
-                  type="color"
-                  value={settingsDraft.color}
-                  onChange={(event) =>
-                    setSettingsDraft((current) => ({
-                      ...current,
-                      color: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-
-            <input
-              value={settingsDraft.logo_url ?? ''}
-              placeholder="URL logo"
-              onChange={(event) =>
-                setSettingsDraft((current) => ({
-                  ...current,
-                  logo_url: event.target.value,
-                }))
-              }
-            />
-            <textarea
-              value={settingsDraft.description}
-              placeholder="Note di personalizzazione"
-              onChange={(event) =>
-                setSettingsDraft((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-            />
-
-            <div className="form-row two">
-              <label>
-                <Globe2 size={14} />
-                <input
-                  value={settingsDraft.website_url}
-                  placeholder="Sito web"
-                  onChange={(event) =>
-                    setSettingsDraft((current) => ({
-                      ...current,
-                      website_url: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                <LinkIcon size={14} />
-                <input
-                  value={settingsDraft.drive_url}
-                  placeholder="Drive / cartella asset"
-                  onChange={(event) =>
-                    setSettingsDraft((current) => ({
-                      ...current,
-                      drive_url: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-
-            <div className="form-row two">
-              <input
-                value={settingsDraft.instagram_url}
-                placeholder="Instagram"
-                onChange={(event) =>
-                  setSettingsDraft((current) => ({
-                    ...current,
-                    instagram_url: event.target.value,
-                  }))
-                }
-              />
-              <input
-                value={settingsDraft.facebook_url}
-                placeholder="Facebook"
-                onChange={(event) =>
-                  setSettingsDraft((current) => ({
-                    ...current,
-                    facebook_url: event.target.value,
-                  }))
-                }
-              />
-              <input
-                value={settingsDraft.linkedin_url}
-                placeholder="LinkedIn"
-                onChange={(event) =>
-                  setSettingsDraft((current) => ({
-                    ...current,
-                    linkedin_url: event.target.value,
-                  }))
-                }
-              />
-              <input
-                value={settingsDraft.x_url}
-                placeholder="X / Twitter"
-                onChange={(event) =>
-                  setSettingsDraft((current) => ({
-                    ...current,
-                    x_url: event.target.value,
-                  }))
-                }
-              />
-              <input
-                value={settingsDraft.youtube_url}
-                placeholder="YouTube"
-                onChange={(event) =>
-                  setSettingsDraft((current) => ({
-                    ...current,
-                    youtube_url: event.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <button type="submit">
-              <Save size={16} />
-              Salva impostazioni
-            </button>
-          </form>
         </Section>
 
         <Section

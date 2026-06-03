@@ -1,6 +1,8 @@
 import {
+  Bell,
   BookOpen,
   CalendarDays,
+  ChevronDown,
   Database,
   FolderKanban,
   LaptopMinimal,
@@ -8,6 +10,7 @@ import {
   LogIn,
   LogOut,
   Menu,
+  MessageCircle,
   Settings,
   Share2,
   UserRoundCog,
@@ -17,6 +20,7 @@ import type { Session } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import { AuthGate } from './components/AuthGate'
 import { AuthModal } from './components/AuthModal'
+import { GuidedTour, type TourStep } from './components/GuidedTour'
 import { dataMode, repository } from './lib/repository'
 import {
   readPreferences,
@@ -31,9 +35,51 @@ import { GuidePage } from './pages/InfoPages'
 import { LandingPage } from './pages/LandingPage'
 import { PricingPage } from './pages/PricingPage'
 import { ProjectPage } from './pages/ProjectPage'
+import { ProjectSettingsPage } from './pages/ProjectSettingsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SocialPlannerPage } from './pages/SocialPlannerPage'
 import type { ProjectSummary } from './types'
+
+const TOUR_STORAGE_KEY = 'flowdesk-guided-tour-completed-v1'
+
+const tourSteps: TourStep[] = [
+  {
+    selector: '[data-tour="workspace"]',
+    title: 'Workspace progetti',
+    description:
+      'Qui trovi il progetto attivo. Quando hai piu progetti, questo menu ti permette di passare rapidamente da uno all altro.',
+  },
+  {
+    selector: '[data-tour="dashboard"]',
+    title: 'Dashboard',
+    description:
+      'La dashboard raccoglie i progetti e ti permette di crearne uno nuovo in pochi secondi.',
+  },
+  {
+    selector: '[data-tour="calendar"]',
+    title: 'Calendario editoriale',
+    description:
+      'Usa il calendario per pianificare note operative e contenuti collegati a un progetto.',
+  },
+  {
+    selector: '[data-tour="social"]',
+    title: 'Social planner',
+    description:
+      'Prepara post Facebook e Instagram, collegandoli al progetto corretto prima della pubblicazione.',
+  },
+  {
+    selector: '[data-tour="notifications"]',
+    title: 'Notifiche',
+    description:
+      'Da qui controllerai promemoria, scadenze e aggiornamenti importanti del workspace.',
+  },
+  {
+    selector: '[data-tour="support"]',
+    title: 'Assistenza',
+    description:
+      'Il pulsante assistenza raccoglie aiuto, riferimenti e supporto operativo quando serve.',
+  },
+]
 
 type Route =
   | {
@@ -59,13 +105,17 @@ type Route =
       id: string
     }
   | {
+      name: 'projectSettings'
+      id: string
+    }
+  | {
       name: 'guide'
     }
   | {
       name: 'settings'
     }
 
-type StaticRouteName = Exclude<Route['name'], 'project'>
+type StaticRouteName = Exclude<Route['name'], 'project' | 'projectSettings'>
 
 const routePaths: Record<StaticRouteName, string> = {
   landing: '/',
@@ -104,7 +154,12 @@ const withBasePath = (path: string) =>
 
 const readRoute = (): Route => {
   const pathname = normalizePathname(stripBasePath(window.location.pathname))
+  const settingsMatch = pathname.match(/^\/projects\/([^/]+)\/settings$/)
   const match = pathname.match(/^\/projects\/([^/]+)$/)
+
+  if (settingsMatch?.[1]) {
+    return { name: 'projectSettings', id: decodeURIComponent(settingsMatch[1]) }
+  }
 
   if (match?.[1]) {
     return { name: 'project', id: decodeURIComponent(match[1]) }
@@ -162,7 +217,10 @@ function App() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
   const [authOpen, setAuthOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false)
   const [sidebarProjects, setSidebarProjects] = useState<ProjectSummary[]>([])
+  const [tourOpen, setTourOpen] = useState(false)
+  const [tourDismissed, setTourDismissed] = useState(false)
 
   useEffect(() => {
     document.documentElement.dataset.theme = preferences.theme
@@ -200,10 +258,13 @@ function App() {
     const routePath =
       next.name === 'project'
         ? `/projects/${encodeURIComponent(next.id)}`
+        : next.name === 'projectSettings'
+          ? `/projects/${encodeURIComponent(next.id)}/settings`
         : routePaths[next.name]
     window.history.pushState(null, '', withBasePath(routePath))
     setRoute(next)
     setSidebarOpen(false)
+    setProjectSwitcherOpen(false)
   }
 
   useEffect(() => {
@@ -211,6 +272,17 @@ function App() {
       navigate({ name: 'dashboard' })
     }
   }, [route.name, session])
+
+  useEffect(() => {
+    const privateRouteOpen = route.name !== 'landing' && route.name !== 'pricing'
+    const completed = localStorage.getItem(TOUR_STORAGE_KEY) === 'true'
+
+    if (authReady && privateRouteOpen && !completed && !tourDismissed) {
+      const timer = window.setTimeout(() => setTourOpen(true), 450)
+
+      return () => window.clearTimeout(timer)
+    }
+  }, [authReady, route.name, tourDismissed])
 
   useEffect(() => {
     const isPublicRoute = route.name === 'landing' || route.name === 'pricing'
@@ -263,12 +335,31 @@ function App() {
           projectId={route.id}
           showHints={preferences.showHints}
           onBack={() => navigate({ name: 'dashboard' })}
+          onOpenSettings={() =>
+            navigate({ name: 'projectSettings', id: route.id })
+          }
+        />
+      )
+    }
+
+    if (route.name === 'projectSettings') {
+      return (
+        <ProjectSettingsPage
+          projectId={route.id}
+          onBack={() => navigate({ name: 'project', id: route.id })}
         />
       )
     }
 
     if (route.name === 'guide') {
-      return <GuidePage />
+      return (
+        <GuidePage
+          onStartDemo={() => {
+            setTourDismissed(false)
+            setTourOpen(true)
+          }}
+        />
+      )
     }
 
     if (route.name === 'settings') {
@@ -303,7 +394,7 @@ function App() {
   const privateRoute =
     route.name === 'landing' ? ({ name: 'dashboard' } as const) : route
   const activeProject =
-    route.name === 'project'
+    route.name === 'project' || route.name === 'projectSettings'
       ? sidebarProjects.find((project) => project.id === route.id)
       : null
 
@@ -341,37 +432,58 @@ function App() {
               <button
                 className="sidebar-brand"
                 type="button"
+                data-tour="brand"
                 onClick={() => navigate({ name: 'landing' })}
               >
                 <span className="brand-mark">F</span>
                 <span>FlowDesk</span>
               </button>
 
-              <div className="active-workspace">
+              <div className="active-workspace" data-tour="workspace">
                 <span>
                   <FolderKanban size={16} />
                 </span>
                 <div>
                   <small>Workspace</small>
                   {sidebarProjects.length > 1 ? (
-                    <select
-                      value={route.name === 'project' ? route.id : ''}
-                      onChange={(event) => {
-                        if (event.target.value) {
-                          navigate({ name: 'project', id: event.target.value })
-                          return
-                        }
-
-                        navigate({ name: 'dashboard' })
-                      }}
-                    >
-                      <option value="">Progetti</option>
-                      {sidebarProjects.map((project) => (
-                        <option value={project.id} key={project.id}>
-                          {project.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="project-switcher">
+                      <button
+                        className="project-switcher-trigger"
+                        type="button"
+                        onClick={() => setProjectSwitcherOpen((open) => !open)}
+                      >
+                        <span>{activeProject?.name ?? 'Progetti'}</span>
+                        <ChevronDown size={13} />
+                      </button>
+                      {projectSwitcherOpen ? (
+                        <div className="project-switcher-menu">
+                          <button
+                            type="button"
+                            onClick={() => navigate({ name: 'dashboard' })}
+                          >
+                            Tutti i progetti
+                          </button>
+                          {sidebarProjects.map((project) => (
+                            <button
+                              className={
+                                activeProject?.id === project.id ? 'active' : ''
+                              }
+                              type="button"
+                              key={project.id}
+                              onClick={() =>
+                                navigate({ name: 'project', id: project.id })
+                              }
+                            >
+                              <span
+                                className="project-switcher-dot"
+                                aria-hidden="true"
+                              />
+                              {project.name}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   ) : (
                     <strong>{activeProject?.name ?? 'Progetti'}</strong>
                   )}
@@ -382,11 +494,13 @@ function App() {
                 <button
                   className={
                     privateRoute.name === 'dashboard' ||
-                    privateRoute.name === 'project'
+                    privateRoute.name === 'project' ||
+                    privateRoute.name === 'projectSettings'
                       ? 'active'
                       : ''
                   }
                   type="button"
+                  data-tour="dashboard"
                   onClick={() => navigate({ name: 'dashboard' })}
                 >
                   <LayoutDashboard size={16} />
@@ -395,6 +509,7 @@ function App() {
                 <button
                   className={privateRoute.name === 'calendar' ? 'active' : ''}
                   type="button"
+                  data-tour="calendar"
                   onClick={() => navigate({ name: 'calendar' })}
                 >
                   <CalendarDays size={16} />
@@ -403,6 +518,7 @@ function App() {
                 <button
                   className={privateRoute.name === 'social' ? 'active' : ''}
                   type="button"
+                  data-tour="social"
                   onClick={() => navigate({ name: 'social' })}
                 >
                   <Share2 size={16} />
@@ -410,6 +526,7 @@ function App() {
                 </button>
                 <button
                   type="button"
+                  data-tour="projects"
                   onClick={() => navigate({ name: 'dashboard' })}
                 >
                   <FolderKanban size={16} />
@@ -418,6 +535,7 @@ function App() {
                 <button
                   className={privateRoute.name === 'guide' ? 'active' : ''}
                   type="button"
+                  data-tour="guide"
                   onClick={() => navigate({ name: 'guide' })}
                 >
                   <BookOpen size={16} />
@@ -426,6 +544,7 @@ function App() {
                 <button
                   className={privateRoute.name === 'admin' ? 'active' : ''}
                   type="button"
+                  data-tour="admin"
                   onClick={() => navigate({ name: 'admin' })}
                 >
                   <UserRoundCog size={16} />
@@ -434,6 +553,7 @@ function App() {
                 <button
                   className={privateRoute.name === 'settings' ? 'active' : ''}
                   type="button"
+                  data-tour="settings"
                   onClick={() => navigate({ name: 'settings' })}
                 >
                   <Settings size={16} />
@@ -477,6 +597,28 @@ function App() {
           </aside>
 
           <main className="workspace-main">
+            <div className="workspace-topbar">
+              <div />
+              <div className="workspace-actions">
+                <button
+                  className="topbar-icon"
+                  type="button"
+                  title="Assistenza"
+                  data-tour="support"
+                >
+                  <MessageCircle size={19} />
+                </button>
+                <button
+                  className="topbar-icon"
+                  type="button"
+                  title="Notifiche"
+                  data-tour="notifications"
+                >
+                  <Bell size={19} />
+                  <span>{sidebarProjects.length > 0 ? sidebarProjects.length : 0}</span>
+                </button>
+              </div>
+            </div>
             <AuthGate
               loading={!authReady}
               locked={isSupabaseConfigured && !session}
@@ -496,6 +638,20 @@ function App() {
             if (route.name === 'landing' || route.name === 'pricing') {
               navigate({ name: 'dashboard' })
             }
+          }}
+        />
+      ) : null}
+
+      {tourOpen ? (
+        <GuidedTour
+          steps={tourSteps}
+          onClose={(completed) => {
+            if (completed) {
+              localStorage.setItem(TOUR_STORAGE_KEY, 'true')
+            } else {
+              setTourDismissed(true)
+            }
+            setTourOpen(false)
           }}
         />
       ) : null}

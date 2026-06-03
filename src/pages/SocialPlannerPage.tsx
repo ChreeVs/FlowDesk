@@ -31,6 +31,26 @@ const statusLabels: Record<SocialPostStatus, string> = {
   failed: 'Errore',
 }
 
+const SOCIAL_CONNECTIONS_KEY = 'flowdesk-social-connections-v1'
+
+const readConnectedPlatforms = (): SocialPlatform[] => {
+  const raw = localStorage.getItem(SOCIAL_CONNECTIONS_KEY)
+
+  if (!raw) {
+    return []
+  }
+
+  try {
+    const value = JSON.parse(raw) as SocialPlatform[]
+
+    return value.filter((platform) =>
+      ['facebook', 'instagram'].includes(platform),
+    )
+  } catch {
+    return []
+  }
+}
+
 const togglePlatform = (
   platforms: SocialPlatform[],
   platform: SocialPlatform,
@@ -49,10 +69,16 @@ export function SocialPlannerPage() {
     'facebook',
     'instagram',
   ])
+  const [connectedPlatforms, setConnectedPlatforms] = useState<SocialPlatform[]>(
+    readConnectedPlatforms,
+  )
   const [scheduledAt, setScheduledAt] = useState(defaultScheduleInput)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const selectedConnectedPlatforms = platforms.filter((platform) =>
+    connectedPlatforms.includes(platform),
+  )
 
   const loadPosts = useCallback(async () => {
     setLoading(true)
@@ -80,7 +106,13 @@ export function SocialPlannerPage() {
   const createPost = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (!projectId || !text.trim() || platforms.length === 0 || !scheduledAt) {
+    if (
+      connectedPlatforms.length === 0 ||
+      !projectId ||
+      !text.trim() ||
+      selectedConnectedPlatforms.length === 0 ||
+      !scheduledAt
+    ) {
       return
     }
 
@@ -92,7 +124,7 @@ export function SocialPlannerPage() {
         project_id: projectId,
         text: text.trim(),
         media_url: mediaUrl.trim() ? normalizeUrl(mediaUrl) : '',
-        platforms,
+        platforms: selectedConnectedPlatforms,
         status: 'scheduled',
         scheduled_at: fromDatetimeLocalValue(scheduledAt),
       })
@@ -111,6 +143,15 @@ export function SocialPlannerPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const connectPlatform = (platform: SocialPlatform) => {
+    setConnectedPlatforms((current) => {
+      const next = current.includes(platform) ? current : [...current, platform]
+      localStorage.setItem(SOCIAL_CONNECTIONS_KEY, JSON.stringify(next))
+
+      return next
+    })
   }
 
   const deletePost = async (postId: string) => {
@@ -136,14 +177,40 @@ export function SocialPlannerPage() {
       {error ? <div className="notice error">{error}</div> : null}
 
       <section className="dashboard-section social-panel">
-        <div className="section-heading">
-          <div>
-            <Share2 size={18} />
-            <h2>Nuovo contenuto</h2>
+        {connectedPlatforms.length === 0 ? (
+          <div className="social-connect">
+            <span>
+              <Share2 size={20} />
+            </span>
+            <div>
+              <h2>Collega un canale per iniziare</h2>
+              <p>
+                Prima di programmare contenuti devi collegare almeno un canale.
+                La connessione OAuth Meta reale va completata lato server.
+              </p>
+              <div>
+                <button type="button" onClick={() => connectPlatform('facebook')}>
+                  Collega Facebook
+                </button>
+                <button type="button" onClick={() => connectPlatform('instagram')}>
+                  Collega Instagram
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="section-heading">
+              <div>
+                <Share2 size={18} />
+                <h2>Nuovo contenuto</h2>
+              </div>
+              <span className="section-meta">
+                {connectedPlatforms.join(' + ')}
+              </span>
+            </div>
 
-        <form className="social-form" onSubmit={createPost}>
+            <form className="social-form" onSubmit={createPost}>
           <div className="form-row two">
             <select
               value={projectId}
@@ -185,6 +252,7 @@ export function SocialPlannerPage() {
                 className={platforms.includes(platform) ? 'active' : ''}
                 type="button"
                 key={platform}
+                disabled={!connectedPlatforms.includes(platform)}
                 onClick={() => setPlatforms((current) => togglePlatform(current, platform))}
               >
                 {platform === 'facebook' ? 'Facebook' : 'Instagram'}
@@ -198,14 +266,17 @@ export function SocialPlannerPage() {
               saving ||
               !projectId ||
               !text.trim() ||
-              platforms.length === 0 ||
+              selectedConnectedPlatforms.length === 0 ||
+              connectedPlatforms.length === 0 ||
               !scheduledAt
             }
           >
             <Plus size={17} />
             Programma
           </button>
-        </form>
+            </form>
+          </>
+        )}
       </section>
 
       {loading ? (

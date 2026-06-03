@@ -1,28 +1,127 @@
-import { CalendarDays, FolderKanban, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  FolderKanban,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { repository } from '../lib/repository'
 import type { CalendarNoteSummary, ProjectSummary } from '../types'
 import {
-  formatDateTime,
   fromDatetimeLocalValue,
   toDatetimeLocalValue,
 } from '../utils/date'
 import { getErrorMessage } from '../utils/error'
 
-const defaultDateInput = () => {
-  const date = new Date()
-  date.setHours(date.getHours() + 2, 0, 0, 0)
+type CalendarView = 'month' | 'week'
 
-  return toDatetimeLocalValue(date.toISOString())
+const weekdayLabels = ['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom']
+const monthFormatter = new Intl.DateTimeFormat('it-IT', {
+  month: 'long',
+  year: 'numeric',
+})
+const timeFormatter = new Intl.DateTimeFormat('it-IT', {
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+const normalizeDay = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+const dayKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`
+
+const sameDay = (a: Date, b: Date) => dayKey(a) === dayKey(b)
+
+const getMonday = (date: Date) => {
+  const current = normalizeDay(date)
+  const day = current.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  current.setDate(current.getDate() + diff)
+
+  return current
+}
+
+const getWeekNumber = (date: Date) => {
+  const current = normalizeDay(date)
+  current.setDate(current.getDate() + 3 - ((current.getDay() + 6) % 7))
+  const weekOne = new Date(current.getFullYear(), 0, 4)
+
+  return (
+    1 +
+    Math.round(
+      ((current.getTime() - weekOne.getTime()) / 86400000 -
+        3 +
+        ((weekOne.getDay() + 6) % 7)) /
+        7,
+    )
+  )
+}
+
+const getCalendarDays = (anchor: Date, view: CalendarView) => {
+  if (view === 'week') {
+    const start = getMonday(anchor)
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(start)
+      date.setDate(start.getDate() + index)
+
+      return date
+    })
+  }
+
+  const firstOfMonth = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
+  const start = getMonday(firstOfMonth)
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+
+    return date
+  })
+}
+
+const editorialIdeas = (date: Date) => {
+  const day = date.getDate()
+  const ideas: Record<number, string[]> = {
+    1: ['Inizio mese', 'Piano contenuti'],
+    3: ['Trend di settore'],
+    5: ['Aggiornamento cliente'],
+    8: ['Review asset'],
+    12: ['Idea carosello'],
+    15: ['Controllo metriche'],
+    18: ['Post educational'],
+    21: ['Recap settimana'],
+    24: ['Dietro le quinte'],
+    28: ['Piano prossimo mese'],
+  }
+
+  return ideas[day] ?? []
+}
+
+const defaultDateInput = (date: Date) => {
+  const next = new Date(date)
+  next.setHours(10, 0, 0, 0)
+
+  return toDatetimeLocalValue(next.toISOString())
 }
 
 export function CalendarPage() {
+  const today = useMemo(() => normalizeDay(new Date()), [])
+  const [anchorDate, setAnchorDate] = useState(today)
+  const [view, setView] = useState<CalendarView>('month')
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [notes, setNotes] = useState<CalendarNoteSummary[]>([])
+  const [modalDate, setModalDate] = useState<Date | null>(null)
   const [projectId, setProjectId] = useState('')
   const [text, setText] = useState('')
-  const [scheduledAt, setScheduledAt] = useState(defaultDateInput)
+  const [scheduledAt, setScheduledAt] = useState(defaultDateInput(today))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +149,37 @@ export function CalendarPage() {
     void loadCalendar()
   }, [loadCalendar])
 
+  const days = useMemo(() => getCalendarDays(anchorDate, view), [anchorDate, view])
+  const notesByDay = useMemo(() => {
+    const map = new Map<string, CalendarNoteSummary[]>()
+
+    notes.forEach((note) => {
+      const key = dayKey(new Date(note.scheduled_at))
+      map.set(key, [...(map.get(key) ?? []), note])
+    })
+
+    return map
+  }, [notes])
+
+  const openModal = (date: Date) => {
+    setModalDate(date)
+    setScheduledAt(defaultDateInput(date))
+    setText('')
+  }
+
+  const move = (direction: -1 | 1) => {
+    setAnchorDate((current) => {
+      const next = new Date(current)
+      if (view === 'week') {
+        next.setDate(current.getDate() + direction * 7)
+      } else {
+        next.setMonth(current.getMonth() + direction)
+      }
+
+      return normalizeDay(next)
+    })
+  }
+
   const addNote = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -66,8 +196,6 @@ export function CalendarPage() {
         text: text.trim(),
         scheduled_at: fromDatetimeLocalValue(scheduledAt),
       })
-      setText('')
-      setScheduledAt(defaultDateInput())
       setNotes((current) =>
         [...current, created].sort(
           (a, b) =>
@@ -75,6 +203,8 @@ export function CalendarPage() {
             new Date(b.scheduled_at).getTime(),
         ),
       )
+      setModalDate(null)
+      setText('')
     } catch (createError) {
       setError(getErrorMessage(createError))
     } finally {
@@ -94,105 +224,178 @@ export function CalendarPage() {
   }
 
   return (
-    <div className="page calendar-page">
-      <div className="page-header dashboard-header">
-        <div>
-          <p className="eyebrow">Pianificazione</p>
-          <h1>Calendario</h1>
+    <div className="page calendar-page editorial-calendar">
+      <div className="calendar-title-row">
+        <h1>Calendario editoriale</h1>
+        <div className="calendar-view-toggle">
+          <button
+            className={view === 'month' ? 'active' : ''}
+            type="button"
+            onClick={() => setView('month')}
+          >
+            Mese
+          </button>
+          <button
+            className={view === 'week' ? 'active' : ''}
+            type="button"
+            onClick={() => setView('week')}
+          >
+            Settimana
+          </button>
         </div>
+      </div>
+
+      <div className="calendar-controls">
+        <div>
+          <button type="button" onClick={() => move(-1)}>
+            <ChevronLeft size={20} />
+          </button>
+          <button type="button" onClick={() => move(1)}>
+            <ChevronRight size={20} />
+          </button>
+          <button
+            type="button"
+            disabled={sameDay(anchorDate, today)}
+            onClick={() => setAnchorDate(today)}
+          >
+            Oggi
+          </button>
+        </div>
+        <strong>{monthFormatter.format(anchorDate)}</strong>
       </div>
 
       {error ? <div className="notice error">{error}</div> : null}
 
-      <section className="dashboard-section calendar-panel">
-        <div className="section-heading">
-          <div>
-            <CalendarDays size={18} />
-            <h2>Nuova nota calendario</h2>
-          </div>
+      <div className={`calendar-board ${view}`}>
+        <div className="calendar-weekdays">
+          {weekdayLabels.map((day) => (
+            <span key={day}>{day}</span>
+          ))}
         </div>
 
-        <form className="calendar-form" onSubmit={addNote}>
-          <select
-            value={projectId}
-            disabled={projects.length === 0}
-            onChange={(event) => setProjectId(event.target.value)}
-          >
-            {projects.length === 0 ? (
-              <option value="">Nessun progetto</option>
-            ) : (
-              projects.map((project) => (
-                <option value={project.id} key={project.id}>
-                  {project.name}
-                </option>
-              ))
-            )}
-          </select>
-          <input
-            type="datetime-local"
-            value={scheduledAt}
-            onChange={(event) => setScheduledAt(event.target.value)}
-          />
-          <input
-            value={text}
-            placeholder="Nota"
-            onChange={(event) => setText(event.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={saving || !projectId || !text.trim() || !scheduledAt}
-          >
-            <Plus size={17} />
-            Aggiungi
-          </button>
-        </form>
-      </section>
+        <div className="calendar-grid-board">
+          {days.map((date) => {
+            const key = dayKey(date)
+            const dayNotes = notesByDay.get(key) ?? []
+            const outside = date.getMonth() !== anchorDate.getMonth()
+            const weekStart = date.getDay() === 1
 
-      {loading ? (
-        <div className="notice">Caricamento calendario...</div>
-      ) : notes.length === 0 ? (
-        <div className="empty-state">
-          <CalendarDays size={28} />
-          <p>Nessuna nota calendario</p>
-        </div>
-      ) : (
-        <section className="dashboard-section">
-          <div className="section-heading">
-            <div>
-              <CalendarDays size={18} />
-              <h2>Note programmate</h2>
-            </div>
-            <span className="section-meta">{notes.length}</span>
-          </div>
-
-          <div className="calendar-list">
-            {notes.map((note) => (
-              <article className="calendar-item" key={note.id}>
-                <span
-                  className="project-color-dot"
-                  style={{ backgroundColor: note.project_color }}
-                />
-                <div>
-                  <strong>{note.text}</strong>
-                  <small>
-                    <FolderKanban size={13} />
-                    {note.project_name}
-                  </small>
+            return (
+              <article
+                className={`calendar-day ${outside ? 'outside' : ''} ${
+                  sameDay(date, today) ? 'today' : ''
+                }`}
+                key={key}
+              >
+                <div className="calendar-day-top">
+                  {weekStart ? <span>Sm{getWeekNumber(date)}</span> : <span />}
+                  <button
+                    type="button"
+                    title="Aggiungi nota"
+                    onClick={() => openModal(date)}
+                  >
+                    <Plus size={14} />
+                  </button>
+                  <time>{date.getDate()}</time>
                 </div>
-                <time>{formatDateTime(note.scheduled_at)}</time>
-                <button
-                  className="icon-button ghost"
-                  type="button"
-                  title="Elimina nota"
-                  onClick={() => void deleteNote(note.id)}
-                >
-                  <Trash2 size={16} />
-                </button>
+
+                <div className="calendar-day-content">
+                  {dayNotes.map((note) => (
+                    <div className="calendar-chip" key={note.id}>
+                      <span>
+                        <Clock3 size={11} />
+                        {timeFormatter.format(new Date(note.scheduled_at))}
+                      </span>
+                      <strong>FEED</strong>
+                      <small>{note.text}</small>
+                      <button
+                        type="button"
+                        title="Elimina nota"
+                        onClick={() => void deleteNote(note.id)}
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))}
+
+                  {editorialIdeas(date).map((idea) => (
+                    <p className="calendar-idea" key={idea}>
+                      {idea}
+                    </p>
+                  ))}
+                </div>
               </article>
-            ))}
+            )
+          })}
+        </div>
+      </div>
+
+      {loading ? <div className="notice">Caricamento calendario...</div> : null}
+
+      {modalDate ? (
+        <div className="modal-backdrop">
+          <div className="calendar-note-modal">
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">Nuova nota</p>
+                <h2>{modalDate.toLocaleDateString('it-IT')}</h2>
+              </div>
+              <button
+                className="icon-button ghost"
+                type="button"
+                title="Chiudi"
+                onClick={() => setModalDate(null)}
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <form className="calendar-modal-form" onSubmit={addNote}>
+              <label>
+                Progetto
+                <select
+                  value={projectId}
+                  disabled={projects.length === 0}
+                  onChange={(event) => setProjectId(event.target.value)}
+                >
+                  {projects.length === 0 ? (
+                    <option value="">Nessun progetto</option>
+                  ) : (
+                    projects.map((project) => (
+                      <option value={project.id} key={project.id}>
+                        {project.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <label>
+                Data e ora
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(event) => setScheduledAt(event.target.value)}
+                />
+              </label>
+              <label>
+                Nota
+                <textarea
+                  value={text}
+                  placeholder="Cosa va ricordato o pubblicato?"
+                  onChange={(event) => setText(event.target.value)}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={saving || !projectId || !text.trim() || !scheduledAt}
+              >
+                <FolderKanban size={16} />
+                {saving ? 'Salvataggio...' : 'Aggiungi nota'}
+              </button>
+            </form>
           </div>
-        </section>
-      )}
+        </div>
+      ) : null}
     </div>
   )
 }
