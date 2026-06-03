@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   FolderKanban,
+  LayoutDashboard,
   ListTodo,
   Plus,
   Trash2,
@@ -23,6 +24,10 @@ export function Dashboard({ onOpenProject, showHints }: DashboardProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const openTasks = projects.reduce(
+    (total, project) => total + project.open_tasks,
+    0,
+  )
 
   const loadProjects = useCallback(async () => {
     setLoading(true)
@@ -84,8 +89,8 @@ export function Dashboard({ onOpenProject, showHints }: DashboardProps) {
     <div className="page dashboard-page">
       <div className="page-header dashboard-header">
         <div>
-          <p className="eyebrow">Scrivania progetti</p>
-          <h1>Progetti</h1>
+          <p className="eyebrow">Scrivania operativa</p>
+          <h1>Dashboard</h1>
         </div>
 
         <form className="quick-form project-create" onSubmit={createProject}>
@@ -107,8 +112,8 @@ export function Dashboard({ onOpenProject, showHints }: DashboardProps) {
 
       {showHints ? (
         <p className="page-hint">
-          Crea un progetto per raccogliere timeline, task, note, link e promemoria
-          nello stesso spazio operativo.
+          Crea un progetto e usa la sua pagina come memoria operativa:
+          timeline, task, note, link e promemoria nello stesso posto.
         </p>
       ) : null}
 
@@ -122,48 +127,78 @@ export function Dashboard({ onOpenProject, showHints }: DashboardProps) {
           <p>Nessun progetto</p>
         </div>
       ) : (
-        <div className="project-list">
-          {projects.map((project) => (
-            <article className="project-card" key={project.id}>
-              <button
-                className="project-open"
-                type="button"
-                onClick={() => onOpenProject(project.id)}
-              >
-                <span className="project-icon">
-                  <FolderKanban size={18} />
-                </span>
-                <span>
-                  <strong>{project.name}</strong>
-                  <small>Creato {formatDate(project.created_at)}</small>
-                </span>
-              </button>
-
-              <span className="task-count" title="Task aperti">
-                <ListTodo size={15} />
-                {project.open_tasks}
-              </span>
-
-              <button
-                className="icon-button ghost"
-                type="button"
-                title="Elimina progetto"
-                onClick={() => void deleteProject(project.id, project.name)}
-              >
-                <Trash2 size={16} />
-              </button>
-
-              <button
-                className="icon-button"
-                type="button"
-                title="Apri progetto"
-                onClick={() => onOpenProject(project.id)}
-              >
-                <ArrowRight size={16} />
-              </button>
+        <>
+          <div className="dashboard-metrics">
+            <article>
+              <span><LayoutDashboard size={17} /></span>
+              <small>Progetti totali</small>
+              <strong>{projects.length}</strong>
             </article>
-          ))}
-        </div>
+            <article>
+              <span><ListTodo size={17} /></span>
+              <small>Task aperti</small>
+              <strong>{openTasks}</strong>
+            </article>
+            <article>
+              <span><FolderKanban size={17} /></span>
+              <small>Ultimo progetto</small>
+              <strong>{projects[0]?.name}</strong>
+            </article>
+          </div>
+
+          <section className="dashboard-section">
+            <div className="section-heading">
+              <div>
+                <FolderKanban size={18} />
+                <h2>Progetti</h2>
+              </div>
+              <span className="section-meta">{projects.length}</span>
+            </div>
+
+            <div className="project-list">
+              {projects.map((project) => (
+                <article className="project-card" key={project.id}>
+                  <button
+                    className="project-open"
+                    type="button"
+                    onClick={() => onOpenProject(project.id)}
+                  >
+                    <span className="project-icon">
+                      <FolderKanban size={18} />
+                    </span>
+                    <span>
+                      <strong>{project.name}</strong>
+                      <small>Creato {formatDate(project.created_at)}</small>
+                    </span>
+                  </button>
+
+                  <span className="task-count" title="Task aperti">
+                    <ListTodo size={15} />
+                    {project.open_tasks}
+                  </span>
+
+                  <button
+                    className="icon-button ghost"
+                    type="button"
+                    title="Elimina progetto"
+                    onClick={() => void deleteProject(project.id, project.name)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title="Apri progetto"
+                    onClick={() => onOpenProject(project.id)}
+                  >
+                    <ArrowRight size={16} />
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        </>
       )}
     </div>
   )

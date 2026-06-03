@@ -55,6 +55,8 @@ Le policy RLS in `supabase/schema.sql` richiedono utenti autenticati. Ogni proge
 - Filtro task aperti/completati
 - Badge scadenze task
 - Header con menu, tab Progetti, Guida e Impostazioni
+- Landing page pubblica su `/`
+- Area operativa privata con sidebar su `/dashboard`
 - Switch tema chiaro/scuro
 - Label esplicative disattivabili dalle impostazioni
 - Footer applicativo

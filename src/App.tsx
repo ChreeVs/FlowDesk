@@ -1,8 +1,9 @@
 import {
+  BookOpen,
   Database,
   FolderKanban,
-  HelpCircle,
   LaptopMinimal,
+  LayoutDashboard,
   LogIn,
   LogOut,
   Menu,
@@ -22,12 +23,16 @@ import {
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { Dashboard } from './pages/Dashboard'
 import { GuidePage } from './pages/InfoPages'
+import { LandingPage } from './pages/LandingPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 type Route =
   | {
-      name: 'projects'
+      name: 'landing'
+    }
+  | {
+      name: 'dashboard'
     }
   | {
       name: 'project'
@@ -43,7 +48,8 @@ type Route =
 type StaticRouteName = Exclude<Route['name'], 'project'>
 
 const routePaths: Record<StaticRouteName, string> = {
-  projects: '/',
+  landing: '/',
+  dashboard: '/dashboard',
   guide: '/guida',
   settings: '/impostazioni',
 }
@@ -77,6 +83,10 @@ const readRoute = (): Route => {
     return { name: 'project', id: decodeURIComponent(match[1]) }
   }
 
+  if (pathname === routePaths.dashboard || pathname === '/progetti') {
+    return { name: 'dashboard' }
+  }
+
   if (
     pathname === routePaths.guide ||
     pathname === '/come-funziona' ||
@@ -89,7 +99,17 @@ const readRoute = (): Route => {
     return { name: 'settings' }
   }
 
-  return { name: 'projects' }
+  return { name: 'landing' }
+}
+
+const getAccountName = (session: Session | null) => {
+  const email = session?.user.email
+
+  if (!email) {
+    return 'Account'
+  }
+
+  return email.split('@')[0]
 }
 
 function App() {
@@ -98,7 +118,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
   const [authOpen, setAuthOpen] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.dataset.theme = preferences.theme
@@ -139,7 +159,7 @@ function App() {
         : routePaths[next.name]
     window.history.pushState(null, '', withBasePath(routePath))
     setRoute(next)
-    setMenuOpen(false)
+    setSidebarOpen(false)
   }
 
   const updatePreferences = (patch: Partial<UserPreferences>) => {
@@ -152,30 +172,19 @@ function App() {
     }
 
     await supabase.auth.signOut()
-    navigate({ name: 'projects' })
+    navigate({ name: 'landing' })
   }
 
   const modeIcon =
     dataMode === 'Supabase' ? <Database size={15} /> : <LaptopMinimal size={15} />
 
-  const isLocked = isSupabaseConfigured && !session
-
-  const renderPage = () => {
-    if (route.name === 'projects') {
-      return (
-        <Dashboard
-          showHints={preferences.showHints}
-          onOpenProject={(id) => navigate({ name: 'project', id })}
-        />
-      )
-    }
-
+  const renderPrivatePage = () => {
     if (route.name === 'project') {
       return (
         <ProjectPage
           projectId={route.id}
           showHints={preferences.showHints}
-          onBack={() => navigate({ name: 'projects' })}
+          onBack={() => navigate({ name: 'dashboard' })}
         />
       )
     }
@@ -184,118 +193,164 @@ function App() {
       return <GuidePage />
     }
 
+    if (route.name === 'settings') {
+      return (
+        <SettingsPage
+          preferences={preferences}
+          onUpdatePreferences={updatePreferences}
+        />
+      )
+    }
+
     return (
-      <SettingsPage
-        preferences={preferences}
-        onUpdatePreferences={updatePreferences}
+      <Dashboard
+        showHints={preferences.showHints}
+        onOpenProject={(id) => navigate({ name: 'project', id })}
       />
     )
   }
 
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="header-left">
-          <button
-            className="brand"
-            type="button"
-            onClick={() => navigate({ name: 'projects' })}
-          >
-            <span className="brand-mark">F</span>
-            <span>FlowDesk</span>
-          </button>
+  const privateRoute =
+    route.name === 'landing' ? ({ name: 'dashboard' } as const) : route
 
+  return (
+    <>
+      {route.name === 'landing' ? (
+        <LandingPage
+          isAuthenticated={Boolean(session)}
+          onLogin={() => setAuthOpen(true)}
+          onOpenApp={() => navigate({ name: 'dashboard' })}
+        />
+      ) : (
+        <div className="workspace-shell">
           <button
-            className="nav-toggle"
+            className="mobile-sidebar-toggle"
             type="button"
             title="Menu"
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => setSidebarOpen((open) => !open)}
           >
-            {menuOpen ? <X size={17} /> : <Menu size={17} />}
+            {sidebarOpen ? <X size={17} /> : <Menu size={17} />}
           </button>
-        </div>
 
-        <nav className={`nav-menu ${menuOpen ? 'open' : ''}`} aria-label="Menu">
-          <button
-            className={`nav-tab ${route.name === 'projects' || route.name === 'project' ? 'active' : ''}`}
-            type="button"
-            onClick={() => navigate({ name: 'projects' })}
-          >
-            <FolderKanban size={16} />
-            Progetti
-          </button>
-          <button
-            className={`nav-tab ${route.name === 'guide' ? 'active' : ''}`}
-            type="button"
-            onClick={() => navigate({ name: 'guide' })}
-          >
-            <HelpCircle size={16} />
-            Guida
-          </button>
-          <button
-            className={`nav-tab ${route.name === 'settings' ? 'active' : ''}`}
-            type="button"
-            onClick={() => navigate({ name: 'settings' })}
-          >
-            <Settings size={16} />
-            Impostazioni
-          </button>
-        </nav>
-
-        <div className="header-actions">
-          <span className="mode-pill">
-            {modeIcon}
-            {dataMode}
-          </span>
-          {session ? (
-            <>
-              <span className="mode-pill account-pill">
-                {session.user.email ?? 'Account'}
-              </span>
+          <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+            <div>
               <button
-                className="auth-button"
+                className="sidebar-brand"
                 type="button"
-                onClick={() => void logout()}
+                onClick={() => navigate({ name: 'landing' })}
               >
-                <LogOut size={16} />
-                Esci
+                <span className="brand-mark">F</span>
+                <span>FlowDesk</span>
               </button>
-            </>
-          ) : (
-            <button
-              className="auth-button"
-              type="button"
-              onClick={() => setAuthOpen(true)}
+
+              <div className="active-workspace">
+                <span>
+                  <FolderKanban size={16} />
+                </span>
+                <div>
+                  <small>Workspace</small>
+                  <strong>Progetti</strong>
+                </div>
+              </div>
+
+              <nav className="sidebar-menu" aria-label="Menu principale">
+                <button
+                  className={
+                    privateRoute.name === 'dashboard' ||
+                    privateRoute.name === 'project'
+                      ? 'active'
+                      : ''
+                  }
+                  type="button"
+                  onClick={() => navigate({ name: 'dashboard' })}
+                >
+                  <LayoutDashboard size={16} />
+                  Dashboard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate({ name: 'dashboard' })}
+                >
+                  <FolderKanban size={16} />
+                  Progetti
+                </button>
+                <button
+                  className={privateRoute.name === 'guide' ? 'active' : ''}
+                  type="button"
+                  onClick={() => navigate({ name: 'guide' })}
+                >
+                  <BookOpen size={16} />
+                  Guida
+                </button>
+                <button
+                  className={privateRoute.name === 'settings' ? 'active' : ''}
+                  type="button"
+                  onClick={() => navigate({ name: 'settings' })}
+                >
+                  <Settings size={16} />
+                  Impostazioni
+                </button>
+              </nav>
+            </div>
+
+            <div className="sidebar-footer">
+              <span className="mode-pill sidebar-mode">
+                {modeIcon}
+                {dataMode}
+              </span>
+              {session ? (
+                <div className="sidebar-account">
+                  <span>{getAccountName(session).slice(0, 2).toUpperCase()}</span>
+                  <div>
+                    <strong>{getAccountName(session)}</strong>
+                    <small>{session.user.email}</small>
+                  </div>
+                  <button
+                    className="icon-button ghost"
+                    type="button"
+                    title="Esci"
+                    onClick={() => void logout()}
+                  >
+                    <LogOut size={15} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="auth-button sidebar-login"
+                  type="button"
+                  onClick={() => setAuthOpen(true)}
+                >
+                  <LogIn size={16} />
+                  Login / Registrazione
+                </button>
+              )}
+            </div>
+          </aside>
+
+          <main className="workspace-main">
+            <AuthGate
+              loading={!authReady}
+              locked={isSupabaseConfigured && !session}
+              onLogin={() => setAuthOpen(true)}
             >
-              <LogIn size={16} />
-              Login / Registrazione
-            </button>
-          )}
+              {renderPrivatePage()}
+            </AuthGate>
+          </main>
         </div>
-      </header>
-
-      <main>
-        <AuthGate
-          loading={!authReady}
-          locked={isLocked}
-          onLogin={() => setAuthOpen(true)}
-        >
-          {renderPage()}
-        </AuthGate>
-      </main>
-
-      <footer className="app-footer">
-        <span>FlowDesk</span>
-        <span>Memoria operativa veloce per progetti, task e follow-up.</span>
-      </footer>
+      )}
 
       {authOpen ? (
         <AuthModal
           onClose={() => setAuthOpen(false)}
-          onAuthenticated={() => setAuthOpen(false)}
+          onAuthenticated={() => {
+            setAuthOpen(false)
+            if (route.name === 'landing') {
+              navigate({ name: 'dashboard' })
+            }
+          }}
         />
       ) : null}
-    </div>
+    </>
   )
 }
 
