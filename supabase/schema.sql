@@ -349,3 +349,5 @@ create policy "reminders_owned_by_project_user"
       )
     )
   );
+
+notify pgrst, 'reload schema';
