@@ -22,6 +22,13 @@ export function LandingPage({
   onLogin,
   onOpenApp,
 }: LandingPageProps) {
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
+
   return (
     <div className="landing-shell">
       <header className="landing-header">
@@ -30,8 +37,12 @@ export function LandingPage({
           <span>FlowDesk</span>
         </button>
         <nav>
-          <a href="#funzioni">Funzioni</a>
-          <a href="#uso">Uso</a>
+          <button type="button" onClick={() => scrollToSection('funzioni')}>
+            Funzioni
+          </button>
+          <button type="button" onClick={() => scrollToSection('uso')}>
+            Uso
+          </button>
           <button className="auth-button" type="button" onClick={onLogin}>
             Login / Registrazione
           </button>
@@ -53,8 +64,12 @@ export function LandingPage({
                 {isAuthenticated ? 'Apri dashboard' : 'Inizia'}
                 <ArrowRight size={17} />
               </button>
-              <button className="secondary" type="button" onClick={onOpenApp}>
-                Guarda area privata
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => scrollToSection('demo')}
+              >
+                Vai alla Demo
               </button>
             </div>
           </div>
@@ -84,8 +99,41 @@ export function LandingPage({
               Crea follow-up con data, ora e collegamento opzionale ai task.
             </Feature>
             <Feature icon={<LockKeyhole size={18} />} title="Privata">
-              Ogni account vede solo i propri progetti tramite policy Supabase.
+            Ogni account vede solo i propri progetti tramite policy Supabase.
             </Feature>
+          </div>
+        </section>
+
+        <section className="landing-band demo-band" id="demo">
+          <div>
+            <p className="eyebrow">Demo guidata</p>
+            <h2>Segui il flusso operativo di FlowDesk.</h2>
+          </div>
+          <div className="demo-steps">
+            <DemoStep
+              step="01"
+              title="Crea il progetto"
+              text="Apri la dashboard, inserisci il nome del progetto e accedi alla sua scrivania operativa."
+            />
+            <DemoStep
+              step="02"
+              title="Registra gli eventi"
+              text="Usa la timeline per annotare approvazioni, richieste, consegne e decisioni importanti."
+            />
+            <DemoStep
+              step="03"
+              title="Trasforma il contesto in azioni"
+              text="Aggiungi task con scadenza, collega promemoria e tieni separati gli elementi completati."
+            />
+            <DemoStep
+              step="04"
+              title="Raccogli materiali e note"
+              text="Salva link, file esterni e note libere per avere tutto il contesto del progetto in un unico posto."
+            />
+            <button className="demo-cta" type="button" onClick={onOpenApp}>
+              Apri la dashboard privata
+              <ArrowRight size={17} />
+            </button>
           </div>
         </section>
 
@@ -107,6 +155,24 @@ export function LandingPage({
         <span>Memoria operativa privata per progetti.</span>
       </footer>
     </div>
+  )
+}
+
+type DemoStepProps = {
+  step: string
+  title: string
+  text: string
+}
+
+function DemoStep({ step, title, text }: DemoStepProps) {
+  return (
+    <article className="demo-step">
+      <span>{step}</span>
+      <div>
+        <h3>{title}</h3>
+        <p>{text}</p>
+      </div>
+    </article>
   )
 }
 

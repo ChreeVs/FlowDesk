@@ -61,6 +61,10 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   min-width: 320px;
   min-height: 100svh;
@@ -127,16 +131,17 @@ main {
   gap: 10px;
 }
 
-.landing-header a {
+.landing-header nav button:not(.auth-button) {
   padding: 9px 10px;
+  border-color: transparent;
   border-radius: 7px;
+  background: transparent;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
-  text-decoration: none;
 }
 
-.landing-header a:hover {
+.landing-header nav button:not(.auth-button):hover {
   background: var(--surface);
   color: var(--text);
 }
@@ -357,6 +362,61 @@ main {
   color: var(--muted);
   font-size: 16px;
   line-height: 1.7;
+}
+
+.demo-band {
+  align-items: start;
+}
+
+.demo-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.demo-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.demo-step > span {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.demo-step h3 {
+  margin: 0 0 5px;
+  font-size: 14px;
+}
+
+.demo-step p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.demo-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 760;
 }
 
 .feature-grid {
@@ -1656,7 +1716,7 @@ button,
     grid-template-columns: 1fr;
   }
 
-  .landing-header nav .auth-button,
+  .landing-header nav button,
   .landing-actions button {
     width: 100%;
   }
