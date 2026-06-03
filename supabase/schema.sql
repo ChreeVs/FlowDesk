@@ -51,6 +51,7 @@ create table if not exists public.reminders (
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
+  role text not null default 'user' check (role in ('user', 'admin')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -70,6 +71,10 @@ create table if not exists public.subscriptions (
 
 alter table public.projects
   add column if not exists user_id uuid references auth.users(id) on delete cascade;
+
+alter table public.profiles
+  add column if not exists role text not null default 'user'
+  check (role in ('user', 'admin'));
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -120,6 +125,18 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row
   execute function public.handle_new_user();
+
+insert into public.profiles(id, display_name)
+select
+  users.id,
+  coalesce(users.raw_user_meta_data->>'name', split_part(users.email, '@', 1))
+from auth.users as users
+on conflict (id) do nothing;
+
+insert into public.subscriptions(user_id, plan, status)
+select users.id, 'free', 'active'
+from auth.users as users
+on conflict (user_id) do nothing;
 
 create index if not exists projects_user_created_idx
   on public.projects(user_id, created_at desc);

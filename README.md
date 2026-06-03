@@ -75,6 +75,46 @@ Alla registrazione, il trigger `on_auth_user_created` crea automaticamente profi
 
 Per pagamenti reali, collega Stripe Checkout e aggiorna `subscriptions` da una Edge Function o da un backend con service role key. Non inserire mai service role key o chiavi `sb_secret_...` nel frontend o nei secret pubblici del build.
 
+## Pannello admin
+
+La pagina privata `/admin` permette di gestire utenti e abbonamenti dal sito. Usa la Edge Function `supabase/functions/admin-users`, perche la lista completa degli utenti e le modifiche ai piani richiedono privilegi server.
+
+Setup iniziale:
+
+1. Rilancia `supabase/schema.sql` nel SQL editor Supabase.
+2. Collega la CLI Supabase al progetto:
+
+```bash
+npx supabase login
+npx supabase link --project-ref ykedlqvnwgrtmeroeche
+```
+
+3. Imposta almeno un amministratore con una di queste opzioni:
+
+```sql
+update public.profiles
+set role = 'admin'
+where id = (
+  select id
+  from auth.users
+  where email = 'tua-email@example.com'
+);
+```
+
+Oppure usa una allowlist server-side:
+
+```bash
+npx supabase secrets set FLOWDESK_ADMIN_EMAILS=tua-email@example.com
+```
+
+4. Deploy della funzione:
+
+```bash
+npx supabase functions deploy admin-users --no-verify-jwt
+```
+
+La funzione verifica comunque il JWT dell'utente e accetta solo account con ruolo `admin` o email presente in `FLOWDESK_ADMIN_EMAILS`.
+
 ## Deploy su GitHub Pages
 
 Il repository include `.github/workflows/deploy.yml`.

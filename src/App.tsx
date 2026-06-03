@@ -9,6 +9,7 @@ import {
   Menu,
   ReceiptText,
   Settings,
+  UserRoundCog,
   X,
 } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
@@ -22,6 +23,7 @@ import {
   type UserPreferences,
 } from './lib/preferences'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
+import { AdminPage } from './pages/AdminPage'
 import { Dashboard } from './pages/Dashboard'
 import { GuidePage } from './pages/InfoPages'
 import { LandingPage } from './pages/LandingPage'
@@ -40,6 +42,9 @@ type Route =
       name: 'pricing'
     }
   | {
+      name: 'admin'
+    }
+  | {
       name: 'project'
       id: string
     }
@@ -56,6 +61,7 @@ const routePaths: Record<StaticRouteName, string> = {
   landing: '/',
   dashboard: '/dashboard',
   pricing: '/pricing',
+  admin: '/admin',
   guide: '/guida',
   settings: '/impostazioni',
 }
@@ -98,6 +104,10 @@ const readRoute = (): Route => {
 
   if (pathname === routePaths.pricing || pathname === '/prezzi') {
     return { name: 'pricing' }
+  }
+
+  if (pathname === routePaths.admin || pathname === '/utenti') {
+    return { name: 'admin' }
   }
 
   if (
@@ -215,6 +225,10 @@ function App() {
       )
     }
 
+    if (route.name === 'admin') {
+      return <AdminPage />
+    }
+
     return (
       <Dashboard
         showHints={preferences.showHints}
@@ -306,19 +320,27 @@ function App() {
                   Guida
                 </button>
                 <button
+                  type="button"
+                  onClick={() => navigate({ name: 'pricing' })}
+                >
+                  <ReceiptText size={16} />
+                  Pricing
+                </button>
+                <button
+                  className={privateRoute.name === 'admin' ? 'active' : ''}
+                  type="button"
+                  onClick={() => navigate({ name: 'admin' })}
+                >
+                  <UserRoundCog size={16} />
+                  Admin
+                </button>
+                <button
                   className={privateRoute.name === 'settings' ? 'active' : ''}
                   type="button"
                   onClick={() => navigate({ name: 'settings' })}
                 >
                   <Settings size={16} />
                   Impostazioni
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate({ name: 'pricing' })}
-                >
-                  <ReceiptText size={16} />
-                  Pricing
                 </button>
               </nav>
             </div>
