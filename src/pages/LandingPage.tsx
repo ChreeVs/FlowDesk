@@ -45,9 +45,11 @@ export function LandingPage({
           <button type="button" onClick={() => scrollToSection('uso')}>
             Uso
           </button>
-          <button type="button" onClick={onOpenPricing}>
-            Pricing
-          </button>
+          {!isAuthenticated ? (
+            <button type="button" onClick={onOpenPricing}>
+              Pricing
+            </button>
+          ) : null}
           <button className="auth-button" type="button" onClick={onLogin}>
             Login / Registrazione
           </button>

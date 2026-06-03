@@ -46,7 +46,7 @@ jobs:
       - name: Add SPA fallbacks
         run: |
           cp dist/index.html dist/404.html
-          for route in pricing prezzi dashboard progetti guida admin utenti impostazioni; do
+          for route in pricing prezzi dashboard progetti guida calendario calendar social programmazione-social admin utenti impostazioni; do
             mkdir -p "dist/$route"
             cp dist/index.html "dist/$route/index.html"
           done

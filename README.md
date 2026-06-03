@@ -50,6 +50,9 @@ Le policy RLS in `supabase/schema.sql` richiedono utenti autenticati. Ogni proge
 
 - Dashboard con lista progetti, creazione e conteggio task aperti
 - Project page con timeline eventi, task, note autosave, link e reminders
+- Impostazioni progetto con logo, colore, note, sito e link social
+- Calendario operativo su `/calendario`
+- Programmazione post Facebook/Instagram su `/social`
 - CRUD per tutte le entita principali
 - Ricerca interna al progetto
 - Filtro task aperti/completati
@@ -114,6 +117,12 @@ npx supabase functions deploy admin-users --no-verify-jwt
 ```
 
 La funzione verifica comunque il JWT dell'utente e accetta solo account con ruolo `admin` o email presente in `FLOWDESK_ADMIN_EMAILS`.
+
+Se nel pannello admin compare un errore di rete, di solito la Edge Function non e stata ancora pubblicata o manca il secret `FLOWDESK_ADMIN_EMAILS`.
+
+## Social publishing
+
+La pagina `/social` salva la programmazione dei post nel database (`social_posts`) con progetto, testo, media URL, piattaforme e data. Per pubblicare automaticamente su Facebook e Instagram serve un'integrazione server-side con Meta Graph API: token pagina, account Instagram Business collegato, permessi approvati e una funzione schedulata che pubblichi i post in stato `scheduled`.
 
 ## Deploy su GitHub Pages
 

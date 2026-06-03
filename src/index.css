@@ -708,6 +708,16 @@ main {
   font-size: 13px;
 }
 
+.active-workspace select {
+  height: 30px;
+  margin-top: 3px;
+  padding: 0 7px;
+  border-color: transparent;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 740;
+}
+
 .sidebar-menu {
   display: grid;
   gap: 6px;
@@ -1351,6 +1361,36 @@ button,
   align-items: flex-end;
 }
 
+.project-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 13px;
+}
+
+.project-logo {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 820;
+}
+
+.project-logo.large {
+  width: 60px;
+  height: 60px;
+}
+
+.project-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .project-title {
   margin-top: 2px;
 }
@@ -1489,6 +1529,179 @@ button,
 
 .date-field {
   width: 154px;
+}
+
+.form-row {
+  display: grid;
+  gap: 8px;
+}
+
+.form-row.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-row label {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.form-row label svg {
+  position: absolute;
+  left: 10px;
+  color: var(--muted);
+}
+
+.form-row label input {
+  padding-left: 32px;
+}
+
+.project-settings-form {
+  display: grid;
+  gap: 10px;
+}
+
+.project-settings-form textarea {
+  min-height: 96px;
+}
+
+.project-settings-form button,
+.calendar-form button,
+.social-form button[type='submit'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 39px;
+  padding: 0 13px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 760;
+}
+
+.settings-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.settings-preview label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.settings-preview input[type='color'] {
+  width: 58px;
+  height: 34px;
+  padding: 3px;
+}
+
+.calendar-panel,
+.social-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.calendar-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.calendar-list,
+.social-list {
+  display: grid;
+  gap: 9px;
+}
+
+.calendar-item,
+.social-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 66px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.project-color-dot {
+  width: 11px;
+  height: 36px;
+  border-radius: 999px;
+}
+
+.calendar-item strong,
+.calendar-item small,
+.social-item strong,
+.social-item small {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+}
+
+.calendar-item strong,
+.social-item strong {
+  overflow-wrap: anywhere;
+}
+
+.calendar-item small,
+.social-item small,
+.calendar-item time,
+.social-item time {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.social-form {
+  display: grid;
+  gap: 10px;
+}
+
+.social-form textarea {
+  min-height: 120px;
+}
+
+.social-platforms {
+  width: max-content;
+  margin-top: 0;
+}
+
+.social-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.social-tags span {
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: capitalize;
 }
 
 .segmented {
@@ -1893,6 +2106,21 @@ button,
   .project-create,
   .search-box {
     width: 100%;
+  }
+
+  .calendar-form,
+  .form-row.two {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-item,
+  .social-item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .calendar-item time,
+  .social-item time {
+    grid-column: 2 / -1;
   }
 
   .project-stats {

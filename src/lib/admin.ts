@@ -64,6 +64,14 @@ const invokeAdminFunction = async <T>(body: unknown): Promise<T> => {
       'content-type': 'application/json',
     },
     body: JSON.stringify(body),
+  }).catch((error: unknown) => {
+    if (error instanceof TypeError) {
+      throw new Error(
+        'Funzione admin non raggiungibile. Verifica di aver pubblicato la Edge Function admin-users e impostato FLOWDESK_ADMIN_EMAILS o il ruolo admin.',
+      )
+    }
+
+    throw error
   })
   const payload = (await response.json().catch(() => null)) as
     | { error?: string }

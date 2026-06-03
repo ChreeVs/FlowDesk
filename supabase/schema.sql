@@ -48,6 +48,47 @@ create table if not exists public.reminders (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.project_settings (
+  project_id uuid primary key references public.projects(id) on delete cascade,
+  logo_url text,
+  color text not null default '#6b58d6',
+  description text not null default '',
+  website_url text not null default '',
+  facebook_url text not null default '',
+  instagram_url text not null default '',
+  linkedin_url text not null default '',
+  x_url text not null default '',
+  youtube_url text not null default '',
+  drive_url text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.calendar_notes (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  text text not null,
+  scheduled_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.social_posts (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  text text not null,
+  media_url text not null default '',
+  platforms text[] not null default '{}'::text[]
+    check (platforms <@ array['facebook', 'instagram']::text[]),
+  status text not null default 'draft'
+    check (status in ('draft', 'scheduled', 'published', 'failed')),
+  scheduled_at timestamptz not null,
+  facebook_post_id text,
+  instagram_media_id text,
+  error_message text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
@@ -98,6 +139,18 @@ create trigger subscriptions_set_updated_at
   for each row
   execute function public.set_updated_at();
 
+drop trigger if exists project_settings_set_updated_at on public.project_settings;
+create trigger project_settings_set_updated_at
+  before update on public.project_settings
+  for each row
+  execute function public.set_updated_at();
+
+drop trigger if exists social_posts_set_updated_at on public.social_posts;
+create trigger social_posts_set_updated_at
+  before update on public.social_posts
+  for each row
+  execute function public.set_updated_at();
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -138,6 +191,11 @@ select users.id, 'free', 'active'
 from auth.users as users
 on conflict (user_id) do nothing;
 
+insert into public.project_settings(project_id)
+select projects.id
+from public.projects as projects
+on conflict (project_id) do nothing;
+
 create index if not exists projects_user_created_idx
   on public.projects(user_id, created_at desc);
 
@@ -156,12 +214,24 @@ create index if not exists links_project_created_idx
 create index if not exists reminders_project_status_time_idx
   on public.reminders(project_id, status, remind_at);
 
+create index if not exists calendar_notes_project_time_idx
+  on public.calendar_notes(project_id, scheduled_at);
+
+create index if not exists social_posts_project_time_idx
+  on public.social_posts(project_id, scheduled_at);
+
+create index if not exists social_posts_status_time_idx
+  on public.social_posts(status, scheduled_at);
+
 alter table public.projects enable row level security;
 alter table public.events enable row level security;
 alter table public.tasks enable row level security;
 alter table public.notes enable row level security;
 alter table public.links enable row level security;
 alter table public.reminders enable row level security;
+alter table public.project_settings enable row level security;
+alter table public.calendar_notes enable row level security;
+alter table public.social_posts enable row level security;
 alter table public.profiles enable row level security;
 alter table public.subscriptions enable row level security;
 
@@ -171,6 +241,9 @@ alter table public.tasks force row level security;
 alter table public.notes force row level security;
 alter table public.links force row level security;
 alter table public.reminders force row level security;
+alter table public.project_settings force row level security;
+alter table public.calendar_notes force row level security;
+alter table public.social_posts force row level security;
 alter table public.profiles force row level security;
 alter table public.subscriptions force row level security;
 
@@ -180,6 +253,9 @@ revoke all on public.tasks from anon;
 revoke all on public.notes from anon;
 revoke all on public.links from anon;
 revoke all on public.reminders from anon;
+revoke all on public.project_settings from anon;
+revoke all on public.calendar_notes from anon;
+revoke all on public.social_posts from anon;
 revoke all on public.profiles from anon;
 revoke all on public.subscriptions from anon;
 
@@ -190,6 +266,9 @@ grant select, insert, update, delete on public.tasks to authenticated;
 grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.links to authenticated;
 grant select, insert, update, delete on public.reminders to authenticated;
+grant select, insert, update, delete on public.project_settings to authenticated;
+grant select, insert, update, delete on public.calendar_notes to authenticated;
+grant select, insert, update, delete on public.social_posts to authenticated;
 grant select on public.profiles to authenticated;
 grant update (display_name) on public.profiles to authenticated;
 grant select on public.subscriptions to authenticated;
@@ -200,6 +279,9 @@ drop policy if exists "single_user_all_tasks" on public.tasks;
 drop policy if exists "single_user_all_notes" on public.notes;
 drop policy if exists "single_user_all_links" on public.links;
 drop policy if exists "single_user_all_reminders" on public.reminders;
+drop policy if exists "project_settings_owned_by_project_user" on public.project_settings;
+drop policy if exists "calendar_notes_owned_by_project_user" on public.calendar_notes;
+drop policy if exists "social_posts_owned_by_project_user" on public.social_posts;
 drop policy if exists "profiles_owned_by_user" on public.profiles;
 drop policy if exists "profiles_update_own_display_name" on public.profiles;
 drop policy if exists "subscriptions_owned_by_user" on public.subscriptions;
@@ -317,6 +399,73 @@ create policy "links_owned_by_project_user"
       where projects.id = links.project_id
         and projects.user_id = (select auth.uid())
     )
+  );
+
+drop policy if exists "project_settings_owned_by_project_user" on public.project_settings;
+create policy "project_settings_owned_by_project_user"
+  on public.project_settings
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = project_settings.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = project_settings.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "calendar_notes_owned_by_project_user" on public.calendar_notes;
+create policy "calendar_notes_owned_by_project_user"
+  on public.calendar_notes
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = calendar_notes.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = calendar_notes.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "social_posts_owned_by_project_user" on public.social_posts;
+create policy "social_posts_owned_by_project_user"
+  on public.social_posts
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = social_posts.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = social_posts.project_id
+        and projects.user_id = (select auth.uid())
+    )
+    and social_posts.platforms <@ array['facebook', 'instagram']::text[]
   );
 
 drop policy if exists "reminders_owned_by_project_user" on public.reminders;

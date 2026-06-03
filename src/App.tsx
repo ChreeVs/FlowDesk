@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CalendarDays,
   Database,
   FolderKanban,
   LaptopMinimal,
@@ -7,8 +8,8 @@ import {
   LogIn,
   LogOut,
   Menu,
-  ReceiptText,
   Settings,
+  Share2,
   UserRoundCog,
   X,
 } from 'lucide-react'
@@ -16,7 +17,7 @@ import type { Session } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import { AuthGate } from './components/AuthGate'
 import { AuthModal } from './components/AuthModal'
-import { dataMode } from './lib/repository'
+import { dataMode, repository } from './lib/repository'
 import {
   readPreferences,
   savePreferences,
@@ -24,12 +25,15 @@ import {
 } from './lib/preferences'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { AdminPage } from './pages/AdminPage'
+import { CalendarPage } from './pages/CalendarPage'
 import { Dashboard } from './pages/Dashboard'
 import { GuidePage } from './pages/InfoPages'
 import { LandingPage } from './pages/LandingPage'
 import { PricingPage } from './pages/PricingPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { SocialPlannerPage } from './pages/SocialPlannerPage'
+import type { ProjectSummary } from './types'
 
 type Route =
   | {
@@ -43,6 +47,12 @@ type Route =
     }
   | {
       name: 'admin'
+    }
+  | {
+      name: 'calendar'
+    }
+  | {
+      name: 'social'
     }
   | {
       name: 'project'
@@ -62,6 +72,8 @@ const routePaths: Record<StaticRouteName, string> = {
   dashboard: '/dashboard',
   pricing: '/pricing',
   admin: '/admin',
+  calendar: '/calendario',
+  social: '/social',
   guide: '/guida',
   settings: '/impostazioni',
 }
@@ -110,6 +122,14 @@ const readRoute = (): Route => {
     return { name: 'admin' }
   }
 
+  if (pathname === routePaths.calendar || pathname === '/calendar') {
+    return { name: 'calendar' }
+  }
+
+  if (pathname === routePaths.social || pathname === '/programmazione-social') {
+    return { name: 'social' }
+  }
+
   if (
     pathname === routePaths.guide ||
     pathname === '/come-funziona' ||
@@ -142,6 +162,7 @@ function App() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
   const [authOpen, setAuthOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarProjects, setSidebarProjects] = useState<ProjectSummary[]>([])
 
   useEffect(() => {
     document.documentElement.dataset.theme = preferences.theme
@@ -184,6 +205,40 @@ function App() {
     setRoute(next)
     setSidebarOpen(false)
   }
+
+  useEffect(() => {
+    if (session && route.name === 'pricing') {
+      navigate({ name: 'dashboard' })
+    }
+  }, [route.name, session])
+
+  useEffect(() => {
+    const isPublicRoute = route.name === 'landing' || route.name === 'pricing'
+
+    if (isPublicRoute || (isSupabaseConfigured && !session)) {
+      setSidebarProjects([])
+      return
+    }
+
+    let ignore = false
+
+    void repository
+      .listProjects()
+      .then((projects) => {
+        if (!ignore) {
+          setSidebarProjects(projects)
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setSidebarProjects([])
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [route, session])
 
   const updatePreferences = (patch: Partial<UserPreferences>) => {
     setPreferences((current) => ({ ...current, ...patch }))
@@ -229,6 +284,14 @@ function App() {
       return <AdminPage />
     }
 
+    if (route.name === 'calendar') {
+      return <CalendarPage />
+    }
+
+    if (route.name === 'social') {
+      return <SocialPlannerPage />
+    }
+
     return (
       <Dashboard
         showHints={preferences.showHints}
@@ -239,10 +302,14 @@ function App() {
 
   const privateRoute =
     route.name === 'landing' ? ({ name: 'dashboard' } as const) : route
+  const activeProject =
+    route.name === 'project'
+      ? sidebarProjects.find((project) => project.id === route.id)
+      : null
 
   return (
     <>
-      {route.name === 'landing' || route.name === 'pricing' ? (
+      {route.name === 'landing' || (route.name === 'pricing' && !session) ? (
         route.name === 'pricing' ? (
           <PricingPage
             isAuthenticated={Boolean(session)}
@@ -286,7 +353,28 @@ function App() {
                 </span>
                 <div>
                   <small>Workspace</small>
-                  <strong>Progetti</strong>
+                  {sidebarProjects.length > 1 ? (
+                    <select
+                      value={route.name === 'project' ? route.id : ''}
+                      onChange={(event) => {
+                        if (event.target.value) {
+                          navigate({ name: 'project', id: event.target.value })
+                          return
+                        }
+
+                        navigate({ name: 'dashboard' })
+                      }}
+                    >
+                      <option value="">Progetti</option>
+                      {sidebarProjects.map((project) => (
+                        <option value={project.id} key={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <strong>{activeProject?.name ?? 'Progetti'}</strong>
+                  )}
                 </div>
               </div>
 
@@ -305,6 +393,22 @@ function App() {
                   Dashboard
                 </button>
                 <button
+                  className={privateRoute.name === 'calendar' ? 'active' : ''}
+                  type="button"
+                  onClick={() => navigate({ name: 'calendar' })}
+                >
+                  <CalendarDays size={16} />
+                  Calendario
+                </button>
+                <button
+                  className={privateRoute.name === 'social' ? 'active' : ''}
+                  type="button"
+                  onClick={() => navigate({ name: 'social' })}
+                >
+                  <Share2 size={16} />
+                  Social
+                </button>
+                <button
                   type="button"
                   onClick={() => navigate({ name: 'dashboard' })}
                 >
@@ -318,13 +422,6 @@ function App() {
                 >
                   <BookOpen size={16} />
                   Guida
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate({ name: 'pricing' })}
-                >
-                  <ReceiptText size={16} />
-                  Pricing
                 </button>
                 <button
                   className={privateRoute.name === 'admin' ? 'active' : ''}
