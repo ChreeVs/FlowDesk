@@ -15,12 +15,14 @@ type LandingPageProps = {
   isAuthenticated: boolean
   onLogin: () => void
   onOpenApp: () => void
+  onOpenPricing: () => void
 }
 
 export function LandingPage({
   isAuthenticated,
   onLogin,
   onOpenApp,
+  onOpenPricing,
 }: LandingPageProps) {
   const scrollToSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({
@@ -42,6 +44,9 @@ export function LandingPage({
           </button>
           <button type="button" onClick={() => scrollToSection('uso')}>
             Uso
+          </button>
+          <button type="button" onClick={onOpenPricing}>
+            Pricing
           </button>
           <button className="auth-button" type="button" onClick={onLogin}>
             Login / Registrazione

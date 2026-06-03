@@ -7,6 +7,7 @@ import {
   LogIn,
   LogOut,
   Menu,
+  ReceiptText,
   Settings,
   X,
 } from 'lucide-react'
@@ -24,6 +25,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { Dashboard } from './pages/Dashboard'
 import { GuidePage } from './pages/InfoPages'
 import { LandingPage } from './pages/LandingPage'
+import { PricingPage } from './pages/PricingPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { SettingsPage } from './pages/SettingsPage'
 
@@ -33,6 +35,9 @@ type Route =
     }
   | {
       name: 'dashboard'
+    }
+  | {
+      name: 'pricing'
     }
   | {
       name: 'project'
@@ -50,6 +55,7 @@ type StaticRouteName = Exclude<Route['name'], 'project'>
 const routePaths: Record<StaticRouteName, string> = {
   landing: '/',
   dashboard: '/dashboard',
+  pricing: '/pricing',
   guide: '/guida',
   settings: '/impostazioni',
 }
@@ -85,6 +91,10 @@ const readRoute = (): Route => {
 
   if (pathname === routePaths.dashboard || pathname === '/progetti') {
     return { name: 'dashboard' }
+  }
+
+  if (pathname === routePaths.pricing || pathname === '/prezzi') {
+    return { name: 'pricing' }
   }
 
   if (
@@ -215,12 +225,22 @@ function App() {
 
   return (
     <>
-      {route.name === 'landing' ? (
-        <LandingPage
-          isAuthenticated={Boolean(session)}
-          onLogin={() => setAuthOpen(true)}
-          onOpenApp={() => navigate({ name: 'dashboard' })}
-        />
+      {route.name === 'landing' || route.name === 'pricing' ? (
+        route.name === 'pricing' ? (
+          <PricingPage
+            isAuthenticated={Boolean(session)}
+            onBackHome={() => navigate({ name: 'landing' })}
+            onLogin={() => setAuthOpen(true)}
+            onOpenApp={() => navigate({ name: 'dashboard' })}
+          />
+        ) : (
+          <LandingPage
+            isAuthenticated={Boolean(session)}
+            onLogin={() => setAuthOpen(true)}
+            onOpenApp={() => navigate({ name: 'dashboard' })}
+            onOpenPricing={() => navigate({ name: 'pricing' })}
+          />
+        )
       ) : (
         <div className="workspace-shell">
           <button
@@ -290,6 +310,13 @@ function App() {
                   <Settings size={16} />
                   Impostazioni
                 </button>
+                <button
+                  type="button"
+                  onClick={() => navigate({ name: 'pricing' })}
+                >
+                  <ReceiptText size={16} />
+                  Pricing
+                </button>
               </nav>
             </div>
 
@@ -344,7 +371,7 @@ function App() {
           onClose={() => setAuthOpen(false)}
           onAuthenticated={() => {
             setAuthOpen(false)
-            if (route.name === 'landing') {
+            if (route.name === 'landing' || route.name === 'pricing') {
               navigate({ name: 'dashboard' })
             }
           }}

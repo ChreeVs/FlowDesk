@@ -48,11 +48,84 @@ create table if not exists public.reminders (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  display_name text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null unique references auth.users(id) on delete cascade,
+  plan text not null default 'free' check (plan in ('free', 'solo', 'studio')),
+  status text not null default 'active' check (status in ('active', 'trialing', 'past_due', 'canceled')),
+  provider text,
+  provider_customer_id text,
+  provider_subscription_id text,
+  current_period_end timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.projects
   add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_set_updated_at on public.profiles;
+create trigger profiles_set_updated_at
+  before update on public.profiles
+  for each row
+  execute function public.set_updated_at();
+
+drop trigger if exists subscriptions_set_updated_at on public.subscriptions;
+create trigger subscriptions_set_updated_at
+  before update on public.subscriptions
+  for each row
+  execute function public.set_updated_at();
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles(id, display_name)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1))
+  )
+  on conflict (id) do nothing;
+
+  insert into public.subscriptions(user_id, plan, status)
+  values (new.id, 'free', 'active')
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row
+  execute function public.handle_new_user();
+
 create index if not exists projects_user_created_idx
   on public.projects(user_id, created_at desc);
+
+create index if not exists subscriptions_user_status_idx
+  on public.subscriptions(user_id, status);
 
 create index if not exists events_project_created_idx
   on public.events(project_id, created_at desc);
@@ -72,6 +145,8 @@ alter table public.tasks enable row level security;
 alter table public.notes enable row level security;
 alter table public.links enable row level security;
 alter table public.reminders enable row level security;
+alter table public.profiles enable row level security;
+alter table public.subscriptions enable row level security;
 
 alter table public.projects force row level security;
 alter table public.events force row level security;
@@ -79,6 +154,8 @@ alter table public.tasks force row level security;
 alter table public.notes force row level security;
 alter table public.links force row level security;
 alter table public.reminders force row level security;
+alter table public.profiles force row level security;
+alter table public.subscriptions force row level security;
 
 revoke all on public.projects from anon;
 revoke all on public.events from anon;
@@ -86,6 +163,8 @@ revoke all on public.tasks from anon;
 revoke all on public.notes from anon;
 revoke all on public.links from anon;
 revoke all on public.reminders from anon;
+revoke all on public.profiles from anon;
+revoke all on public.subscriptions from anon;
 
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.projects to authenticated;
@@ -94,6 +173,9 @@ grant select, insert, update, delete on public.tasks to authenticated;
 grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.links to authenticated;
 grant select, insert, update, delete on public.reminders to authenticated;
+grant select on public.profiles to authenticated;
+grant update (display_name) on public.profiles to authenticated;
+grant select on public.subscriptions to authenticated;
 
 drop policy if exists "single_user_all_projects" on public.projects;
 drop policy if exists "single_user_all_events" on public.events;
@@ -101,6 +183,9 @@ drop policy if exists "single_user_all_tasks" on public.tasks;
 drop policy if exists "single_user_all_notes" on public.notes;
 drop policy if exists "single_user_all_links" on public.links;
 drop policy if exists "single_user_all_reminders" on public.reminders;
+drop policy if exists "profiles_owned_by_user" on public.profiles;
+drop policy if exists "profiles_update_own_display_name" on public.profiles;
+drop policy if exists "subscriptions_owned_by_user" on public.subscriptions;
 
 drop policy if exists "projects_owned_by_user" on public.projects;
 create policy "projects_owned_by_user"
@@ -109,6 +194,25 @@ create policy "projects_owned_by_user"
   to authenticated
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
+
+create policy "profiles_owned_by_user"
+  on public.profiles
+  for select
+  to authenticated
+  using (id = (select auth.uid()));
+
+create policy "profiles_update_own_display_name"
+  on public.profiles
+  for update
+  to authenticated
+  using (id = (select auth.uid()))
+  with check (id = (select auth.uid()));
+
+create policy "subscriptions_owned_by_user"
+  on public.subscriptions
+  for select
+  to authenticated
+  using (user_id = (select auth.uid()));
 
 drop policy if exists "events_owned_by_project_user" on public.events;
 create policy "events_owned_by_project_user"

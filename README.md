@@ -57,11 +57,23 @@ Le policy RLS in `supabase/schema.sql` richiedono utenti autenticati. Ogni proge
 - Header con menu, tab Progetti, Guida e Impostazioni
 - Landing page pubblica su `/`
 - Demo guidata pubblica nella landing
+- Pagina pricing pubblica su `/pricing` con piani Free, Solo e Studio
 - Area operativa privata con sidebar su `/dashboard`
 - Switch tema chiaro/scuro
 - Label esplicative disattivabili dalle impostazioni
 - Footer applicativo
 - App privata con login/registrazione Supabase obbligatori
+
+## Backend utenti e pricing
+
+Gli utenti registrati vivono in Supabase Auth (`Authentication > Users`). Lo schema aggiunge due tabelle applicative:
+
+- `profiles`: dati modificabili dell'utente, come `display_name`
+- `subscriptions`: piano corrente (`free`, `solo`, `studio`) e stato abbonamento
+
+Alla registrazione, il trigger `on_auth_user_created` crea automaticamente profilo e subscription Free.
+
+Per pagamenti reali, collega Stripe Checkout e aggiorna `subscriptions` da una Edge Function o da un backend con service role key. Non inserire mai service role key o chiavi `sb_secret_...` nel frontend o nei secret pubblici del build.
 
 ## Deploy su GitHub Pages
 
