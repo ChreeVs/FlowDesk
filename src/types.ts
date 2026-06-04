@@ -2,6 +2,9 @@ export type TaskStatus = 'todo' | 'done'
 export type ReminderStatus = 'pending' | 'done'
 export type SocialPlatform = 'facebook' | 'instagram'
 export type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed'
+export type AdsPlatform = 'facebook' | 'instagram'
+export type SponsorAdBatchStatus = 'draft' | 'ready' | 'exported' | 'launched'
+export type SponsorAdPostStatus = 'queued' | 'created' | 'failed'
 export type ClientRequestType =
   | 'modifica'
   | 'nuovo_lavoro'
@@ -120,6 +123,48 @@ export type SocialPostSummary = SocialPost & {
   project_color: string
 }
 
+export type SponsorAdBatch = {
+  id: string
+  project_id: string
+  name: string
+  ad_account_id: string
+  ad_account_name: string
+  source_id: string
+  source_name: string
+  campaign_id: string
+  campaign_name: string
+  adset_id: string
+  adset_name: string
+  rule_id: string
+  rule_name: string
+  ad_name_pattern: string
+  create_active: boolean
+  status: SponsorAdBatchStatus
+  created_at: string
+  updated_at: string
+}
+
+export type SponsorAdPost = {
+  id: string
+  batch_id: string
+  platform: AdsPlatform
+  source_post_id: string
+  source_label: string
+  post_text: string
+  permalink_url: string
+  thumbnail_url: string
+  published_at: string | null
+  ad_name: string
+  status: SponsorAdPostStatus
+  created_at: string
+}
+
+export type SponsorAdBatchSummary = SponsorAdBatch & {
+  project_name: string
+  project_color: string
+  posts: SponsorAdPost[]
+}
+
 export type ProjectRequestLink = {
   id: string
   project_id: string
@@ -195,6 +240,7 @@ export type ProjectBundle = {
   links: ProjectLink[]
   reminders: Reminder[]
   social_posts: SocialPost[]
+  sponsor_ad_batches: SponsorAdBatchSummary[]
   client_requests: ClientRequestSummary[]
 }
 

@@ -2368,6 +2368,190 @@ button,
   text-transform: capitalize;
 }
 
+.sponsor-page {
+  width: min(1380px, 100%);
+}
+
+.sponsor-meta-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.sponsor-meta-panel > span {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.sponsor-meta-panel p {
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.sponsor-workflow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.sponsor-card,
+.sponsor-history,
+.sponsor-export {
+  display: grid;
+  gap: 12px;
+}
+
+.sponsor-card .form-row label,
+.sponsor-card > label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.sponsor-card .form-row label input {
+  padding-left: 11px;
+}
+
+.sponsor-toggle {
+  justify-content: flex-start;
+  width: fit-content;
+}
+
+.sponsor-post-form {
+  display: grid;
+  gap: 9px;
+}
+
+.sponsor-post-form textarea {
+  min-height: 94px;
+}
+
+.sponsor-post-form button,
+.sponsor-actions button,
+.sponsor-batch-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  font-weight: 760;
+}
+
+.sponsor-post-form button,
+.sponsor-actions button[type='submit'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.sponsor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sponsor-queue,
+.sponsor-batch-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sponsor-queue-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.sponsor-queue-row > span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.sponsor-queue-row strong,
+.sponsor-queue-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.sponsor-queue-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sponsor-queue-row input {
+  min-height: 34px;
+  margin-top: 8px;
+}
+
+.sponsor-batch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  min-height: 72px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.sponsor-batch strong,
+.sponsor-batch small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sponsor-batch small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sponsor-batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.sponsor-batch-actions button:not(.icon-button) {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sponsor-export textarea {
+  min-height: 260px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
 .editorial-calendar {
   width: min(1580px, 100%);
 }
@@ -3260,6 +3444,10 @@ button,
     grid-template-columns: 1fr;
   }
 
+  .sponsor-workflow {
+    grid-template-columns: 1fr;
+  }
+
   .request-detail-heading {
     align-items: flex-start;
     flex-direction: column;
@@ -3417,8 +3605,23 @@ button,
 
   .request-status-actions button,
   .request-update-form button[type='submit'],
-  .secondary-action {
+  .secondary-action,
+  .sponsor-actions button,
+  .sponsor-post-form button {
     width: 100%;
+  }
+
+  .sponsor-batch {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .sponsor-batch-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .sponsor-batch-actions button:not(.icon-button) {
+    flex: 1 1 150px;
   }
 
   .project-card .task-count {

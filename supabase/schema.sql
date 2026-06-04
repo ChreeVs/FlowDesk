@@ -150,6 +150,44 @@ create table if not exists public.social_posts (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.sponsor_ad_batches (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  name text not null,
+  ad_account_id text not null default '',
+  ad_account_name text not null default '',
+  source_id text not null default '',
+  source_name text not null default '',
+  campaign_id text not null default '',
+  campaign_name text not null default '',
+  adset_id text not null default '',
+  adset_name text not null default '',
+  rule_id text not null default '',
+  rule_name text not null default '',
+  ad_name_pattern text not null default 'ADV - {platform} - {post}',
+  create_active boolean not null default false,
+  status text not null default 'draft'
+    check (status in ('draft', 'ready', 'exported', 'launched')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.sponsor_ad_posts (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid not null references public.sponsor_ad_batches(id) on delete cascade,
+  platform text not null check (platform in ('facebook', 'instagram')),
+  source_post_id text not null,
+  source_label text not null default '',
+  post_text text not null default '',
+  permalink_url text not null default '',
+  thumbnail_url text not null default '',
+  published_at timestamptz,
+  ad_name text not null default '',
+  status text not null default 'queued'
+    check (status in ('queued', 'created', 'failed')),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
@@ -264,6 +302,12 @@ create trigger project_settings_set_updated_at
 drop trigger if exists social_posts_set_updated_at on public.social_posts;
 create trigger social_posts_set_updated_at
   before update on public.social_posts
+  for each row
+  execute function public.set_updated_at();
+
+drop trigger if exists sponsor_ad_batches_set_updated_at on public.sponsor_ad_batches;
+create trigger sponsor_ad_batches_set_updated_at
+  before update on public.sponsor_ad_batches
   for each row
   execute function public.set_updated_at();
 
@@ -536,6 +580,12 @@ create index if not exists social_posts_project_time_idx
 create index if not exists social_posts_status_time_idx
   on public.social_posts(status, scheduled_at);
 
+create index if not exists sponsor_ad_batches_project_created_idx
+  on public.sponsor_ad_batches(project_id, created_at desc);
+
+create index if not exists sponsor_ad_posts_batch_created_idx
+  on public.sponsor_ad_posts(batch_id, created_at desc);
+
 alter table public.projects enable row level security;
 alter table public.events enable row level security;
 alter table public.tasks enable row level security;
@@ -550,6 +600,8 @@ alter table public.client_request_files enable row level security;
 alter table public.client_request_updates enable row level security;
 alter table public.notifications enable row level security;
 alter table public.social_posts enable row level security;
+alter table public.sponsor_ad_batches enable row level security;
+alter table public.sponsor_ad_posts enable row level security;
 alter table public.profiles enable row level security;
 alter table public.subscriptions enable row level security;
 
@@ -567,6 +619,8 @@ alter table public.client_request_files force row level security;
 alter table public.client_request_updates force row level security;
 alter table public.notifications force row level security;
 alter table public.social_posts force row level security;
+alter table public.sponsor_ad_batches force row level security;
+alter table public.sponsor_ad_posts force row level security;
 alter table public.profiles force row level security;
 alter table public.subscriptions force row level security;
 
@@ -584,6 +638,8 @@ revoke all on public.client_request_files from anon;
 revoke all on public.client_request_updates from anon;
 revoke all on public.notifications from anon;
 revoke all on public.social_posts from anon;
+revoke all on public.sponsor_ad_batches from anon;
+revoke all on public.sponsor_ad_posts from anon;
 revoke all on public.profiles from anon;
 revoke all on public.subscriptions from anon;
 
@@ -602,6 +658,8 @@ grant select, insert, update, delete on public.client_request_files to authentic
 grant select, insert, update, delete on public.client_request_updates to authenticated;
 grant select, update, delete on public.notifications to authenticated;
 grant select, insert, update, delete on public.social_posts to authenticated;
+grant select, insert, update, delete on public.sponsor_ad_batches to authenticated;
+grant select, insert, update, delete on public.sponsor_ad_posts to authenticated;
 grant select on public.profiles to authenticated;
 grant update (display_name) on public.profiles to authenticated;
 grant select on public.subscriptions to authenticated;
@@ -620,6 +678,8 @@ drop policy if exists "client_request_files_owned_by_project_user" on public.cli
 drop policy if exists "client_request_updates_owned_by_project_user" on public.client_request_updates;
 drop policy if exists "notifications_owned_by_user" on public.notifications;
 drop policy if exists "social_posts_owned_by_project_user" on public.social_posts;
+drop policy if exists "sponsor_ad_batches_owned_by_project_user" on public.sponsor_ad_batches;
+drop policy if exists "sponsor_ad_posts_owned_by_project_user" on public.sponsor_ad_posts;
 drop policy if exists "profiles_owned_by_user" on public.profiles;
 drop policy if exists "profiles_update_own_display_name" on public.profiles;
 drop policy if exists "subscriptions_owned_by_user" on public.subscriptions;
@@ -975,6 +1035,52 @@ create policy "social_posts_owned_by_project_user"
         and projects.user_id = (select auth.uid())
     )
     and social_posts.platforms <@ array['facebook', 'instagram']::text[]
+  );
+
+drop policy if exists "sponsor_ad_batches_owned_by_project_user" on public.sponsor_ad_batches;
+create policy "sponsor_ad_batches_owned_by_project_user"
+  on public.sponsor_ad_batches
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = sponsor_ad_batches.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.projects
+      where projects.id = sponsor_ad_batches.project_id
+        and projects.user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "sponsor_ad_posts_owned_by_project_user" on public.sponsor_ad_posts;
+create policy "sponsor_ad_posts_owned_by_project_user"
+  on public.sponsor_ad_posts
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.sponsor_ad_batches
+      join public.projects on projects.id = sponsor_ad_batches.project_id
+      where sponsor_ad_batches.id = sponsor_ad_posts.batch_id
+        and projects.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.sponsor_ad_batches
+      join public.projects on projects.id = sponsor_ad_batches.project_id
+      where sponsor_ad_batches.id = sponsor_ad_posts.batch_id
+        and projects.user_id = (select auth.uid())
+    )
   );
 
 drop policy if exists "reminders_owned_by_project_user" on public.reminders;

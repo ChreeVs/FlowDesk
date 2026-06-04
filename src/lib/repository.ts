@@ -20,6 +20,10 @@ import type {
   PublicRequestForm,
   Reminder,
   ReminderStatus,
+  SponsorAdBatch,
+  SponsorAdBatchStatus,
+  SponsorAdBatchSummary,
+  SponsorAdPost,
   SocialPost,
   SocialPostSummary,
   Task,
@@ -42,6 +46,34 @@ type SocialPostPatch = Pick<
   SocialPost,
   'project_id' | 'text' | 'media_url' | 'platforms' | 'status' | 'scheduled_at'
 >
+type SponsorAdBatchPatch = Pick<
+  SponsorAdBatch,
+  | 'project_id'
+  | 'name'
+  | 'ad_account_id'
+  | 'ad_account_name'
+  | 'source_id'
+  | 'source_name'
+  | 'campaign_id'
+  | 'campaign_name'
+  | 'adset_id'
+  | 'adset_name'
+  | 'rule_id'
+  | 'rule_name'
+  | 'ad_name_pattern'
+  | 'create_active'
+>
+type SponsorAdPostPatch = Pick<
+  SponsorAdPost,
+  | 'platform'
+  | 'source_post_id'
+  | 'source_label'
+  | 'post_text'
+  | 'permalink_url'
+  | 'thumbnail_url'
+  | 'published_at'
+  | 'ad_name'
+>
 type ClientRequestPatch = {
   title: string
   request_type: ClientRequestType
@@ -63,6 +95,8 @@ type LocalDb = {
   reminders: Reminder[]
   calendar_notes: CalendarNote[]
   social_posts: SocialPost[]
+  sponsor_ad_batches: SponsorAdBatch[]
+  sponsor_ad_posts: SponsorAdPost[]
   request_links: ProjectRequestLink[]
   client_requests: ClientRequest[]
   client_request_files: ClientRequestFile[]
@@ -82,6 +116,8 @@ const emptyDb = (): LocalDb => ({
   reminders: [],
   calendar_notes: [],
   social_posts: [],
+  sponsor_ad_batches: [],
+  sponsor_ad_posts: [],
   request_links: [],
   client_requests: [],
   client_request_files: [],
@@ -285,6 +321,51 @@ const summarizeSocialPosts = (
     }
   })
 
+const summarizeSponsorAdBatches = (
+  batches: SponsorAdBatch[],
+  projects: Project[],
+  settings: ProjectSettings[],
+  posts: SponsorAdPost[],
+): SponsorAdBatchSummary[] =>
+  byNewest(batches).map((batch) => {
+    const project = projects.find((item) => item.id === batch.project_id)
+    const projectSettings = settings.find(
+      (item) => item.project_id === batch.project_id,
+    )
+
+    return {
+      ...batch,
+      project_name: project?.name ?? 'Progetto',
+      project_color: projectSettings?.color ?? '#6b58d6',
+      posts: byNewest(posts.filter((post) => post.batch_id === batch.id)),
+    }
+  })
+
+const validateSponsorAdBatchPatch = (
+  patch: SponsorAdBatchPatch,
+  posts: SponsorAdPostPatch[],
+) => {
+  if (!patch.project_id) {
+    throw new Error('Seleziona un progetto')
+  }
+
+  if (!patch.name.trim()) {
+    throw new Error('Nome batch obbligatorio')
+  }
+
+  if (!patch.campaign_name.trim() && !patch.campaign_id.trim()) {
+    throw new Error('Inserisci almeno nome o ID campagna')
+  }
+
+  if (!patch.adset_name.trim() && !patch.adset_id.trim()) {
+    throw new Error('Inserisci almeno nome o ID gruppo inserzioni')
+  }
+
+  if (posts.length === 0) {
+    throw new Error('Aggiungi almeno un post alla lista')
+  }
+}
+
 const requireSupabase = () => {
   if (!supabase) {
     throw new Error('Supabase non configurato')
@@ -421,6 +502,8 @@ const supabaseRepository = {
     let clientRequests: ClientRequest[] = []
     let requestFiles: ClientRequestFile[] = []
     let requestUpdates: ClientRequestUpdate[] = []
+    let sponsorAdBatches: SponsorAdBatch[] = []
+    let sponsorAdPosts: SponsorAdPost[] = []
 
     try {
       clientRequests = await unwrap<ClientRequest[]>(
@@ -473,6 +556,42 @@ const supabaseRepository = {
       }
     }
 
+    try {
+      sponsorAdBatches = await unwrap<SponsorAdBatch[]>(
+        client
+          .from('sponsor_ad_batches')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false }),
+      )
+      sponsorAdPosts =
+        sponsorAdBatches.length > 0
+          ? await unwrap<SponsorAdPost[]>(
+              client
+                .from('sponsor_ad_posts')
+                .select('*')
+                .in(
+                  'batch_id',
+                  sponsorAdBatches.map((batch) => batch.id),
+                ),
+            )
+          : []
+    } catch (adsError) {
+      const message =
+        adsError instanceof Error
+          ? adsError.message
+          : typeof adsError === 'object' && adsError && 'message' in adsError
+            ? String(adsError.message)
+            : ''
+
+      if (
+        !message.includes('sponsor_ad_batches') &&
+        !message.includes('sponsor_ad_posts')
+      ) {
+        throw adsError
+      }
+    }
+
     return {
       project,
       settings: settings[0] ?? null,
@@ -482,6 +601,12 @@ const supabaseRepository = {
       links,
       reminders,
       social_posts: socialPosts,
+      sponsor_ad_batches: summarizeSponsorAdBatches(
+        sponsorAdBatches,
+        [project],
+        settings,
+        sponsorAdPosts,
+      ),
       client_requests: summarizeClientRequests(
         clientRequests,
         [project],
@@ -1029,6 +1154,127 @@ const supabaseRepository = {
   async deleteSocialPost(id: string): Promise<void> {
     await ensure(requireSupabase().from('social_posts').delete().eq('id', id))
   },
+
+  async listSponsorAdBatches(): Promise<SponsorAdBatchSummary[]> {
+    const client = requireSupabase()
+    const [batches, projects, settings] = await Promise.all([
+      unwrap<SponsorAdBatch[]>(
+        client
+          .from('sponsor_ad_batches')
+          .select('*')
+          .order('created_at', { ascending: false }),
+      ),
+      unwrap<Project[]>(client.from('projects').select('*')),
+      unwrap<ProjectSettings[]>(client.from('project_settings').select('*')),
+    ])
+    const posts =
+      batches.length > 0
+        ? await unwrap<SponsorAdPost[]>(
+            client
+              .from('sponsor_ad_posts')
+              .select('*')
+              .in(
+                'batch_id',
+                batches.map((batch) => batch.id),
+              ),
+          )
+        : []
+
+    return summarizeSponsorAdBatches(batches, projects, settings, posts)
+  },
+
+  async createSponsorAdBatch(
+    patch: SponsorAdBatchPatch,
+    posts: SponsorAdPostPatch[],
+  ): Promise<SponsorAdBatchSummary> {
+    validateSponsorAdBatchPatch(patch, posts)
+
+    const client = requireSupabase()
+    const created = await unwrap<SponsorAdBatch>(
+      client
+        .from('sponsor_ad_batches')
+        .insert({
+          ...patch,
+          name: patch.name.trim(),
+          ad_account_id: patch.ad_account_id.trim(),
+          ad_account_name: patch.ad_account_name.trim(),
+          source_id: patch.source_id.trim(),
+          source_name: patch.source_name.trim(),
+          campaign_id: patch.campaign_id.trim(),
+          campaign_name: patch.campaign_name.trim(),
+          adset_id: patch.adset_id.trim(),
+          adset_name: patch.adset_name.trim(),
+          rule_id: patch.rule_id.trim(),
+          rule_name: patch.rule_name.trim(),
+          ad_name_pattern: patch.ad_name_pattern.trim() || 'ADV - {platform} - {post}',
+          status: 'ready',
+        })
+        .select()
+        .single(),
+    )
+
+    try {
+      await ensure(
+        client.from('sponsor_ad_posts').insert(
+          posts.map((post) => ({
+            batch_id: created.id,
+            platform: post.platform,
+            source_post_id: post.source_post_id.trim(),
+            source_label: post.source_label.trim(),
+            post_text: post.post_text.trim(),
+            permalink_url: post.permalink_url.trim(),
+            thumbnail_url: post.thumbnail_url.trim(),
+            published_at: post.published_at || null,
+            ad_name: post.ad_name.trim(),
+          })),
+        ),
+      )
+    } catch (postError) {
+      await ensure(client.from('sponsor_ad_batches').delete().eq('id', created.id))
+      throw postError
+    }
+
+    const [project, settings, createdPosts] = await Promise.all([
+      unwrap<Project>(
+        client.from('projects').select('*').eq('id', created.project_id).single(),
+      ),
+      unwrap<ProjectSettings[]>(
+        client
+          .from('project_settings')
+          .select('*')
+          .eq('project_id', created.project_id)
+          .limit(1),
+      ),
+      unwrap<SponsorAdPost[]>(
+        client.from('sponsor_ad_posts').select('*').eq('batch_id', created.id),
+      ),
+    ])
+
+    return summarizeSponsorAdBatches(
+      [created],
+      [project],
+      settings,
+      createdPosts,
+    )[0]
+  },
+
+  async updateSponsorAdBatchStatus(
+    batchId: string,
+    status: SponsorAdBatchStatus,
+  ): Promise<SponsorAdBatch> {
+    return unwrap<SponsorAdBatch>(
+      requireSupabase()
+        .from('sponsor_ad_batches')
+        .update({ status })
+        .eq('id', batchId)
+        .select()
+        .single(),
+    )
+  },
+
+  async deleteSponsorAdBatch(batchId: string): Promise<void> {
+    await ensure(requireSupabase().from('sponsor_ad_batches').delete().eq('id', batchId))
+  },
 }
 
 const localRepository = {
@@ -1086,6 +1332,15 @@ const localRepository = {
     db.social_posts = db.social_posts.filter(
       (post) => post.project_id !== projectId,
     )
+    const batchIds = db.sponsor_ad_batches
+      .filter((batch) => batch.project_id === projectId)
+      .map((batch) => batch.id)
+    db.sponsor_ad_batches = db.sponsor_ad_batches.filter(
+      (batch) => batch.project_id !== projectId,
+    )
+    db.sponsor_ad_posts = db.sponsor_ad_posts.filter(
+      (post) => !batchIds.includes(post.batch_id),
+    )
     const requestIds = db.client_requests
       .filter((request) => request.project_id === projectId)
       .map((request) => request.id)
@@ -1128,6 +1383,12 @@ const localRepository = {
         (reminder) => reminder.project_id === projectId,
       ),
       social_posts: db.social_posts.filter((post) => post.project_id === projectId),
+      sponsor_ad_batches: summarizeSponsorAdBatches(
+        db.sponsor_ad_batches.filter((batch) => batch.project_id === projectId),
+        db.projects,
+        db.project_settings,
+        db.sponsor_ad_posts,
+      ),
       client_requests: summarizeClientRequests(
         db.client_requests.filter((request) => request.project_id === projectId),
         db.projects,
@@ -1633,6 +1894,100 @@ const localRepository = {
   async deleteSocialPost(postId: string): Promise<void> {
     const db = readDb()
     db.social_posts = db.social_posts.filter((post) => post.id !== postId)
+    writeDb(db)
+  },
+
+  async listSponsorAdBatches(): Promise<SponsorAdBatchSummary[]> {
+    const db = readDb()
+
+    return summarizeSponsorAdBatches(
+      db.sponsor_ad_batches,
+      db.projects,
+      db.project_settings,
+      db.sponsor_ad_posts,
+    )
+  },
+
+  async createSponsorAdBatch(
+    patch: SponsorAdBatchPatch,
+    posts: SponsorAdPostPatch[],
+  ): Promise<SponsorAdBatchSummary> {
+    validateSponsorAdBatchPatch(patch, posts)
+
+    const db = readDb()
+    const batch: SponsorAdBatch = {
+      id: id(),
+      project_id: patch.project_id,
+      name: patch.name.trim(),
+      ad_account_id: patch.ad_account_id.trim(),
+      ad_account_name: patch.ad_account_name.trim(),
+      source_id: patch.source_id.trim(),
+      source_name: patch.source_name.trim(),
+      campaign_id: patch.campaign_id.trim(),
+      campaign_name: patch.campaign_name.trim(),
+      adset_id: patch.adset_id.trim(),
+      adset_name: patch.adset_name.trim(),
+      rule_id: patch.rule_id.trim(),
+      rule_name: patch.rule_name.trim(),
+      ad_name_pattern: patch.ad_name_pattern.trim() || 'ADV - {platform} - {post}',
+      create_active: patch.create_active,
+      status: 'ready',
+      created_at: now(),
+      updated_at: now(),
+    }
+    const createdPosts: SponsorAdPost[] = posts.map((post) => ({
+      id: id(),
+      batch_id: batch.id,
+      platform: post.platform,
+      source_post_id: post.source_post_id.trim(),
+      source_label: post.source_label.trim(),
+      post_text: post.post_text.trim(),
+      permalink_url: post.permalink_url.trim(),
+      thumbnail_url: post.thumbnail_url.trim(),
+      published_at: post.published_at || null,
+      ad_name: post.ad_name.trim(),
+      status: 'queued',
+      created_at: now(),
+    }))
+
+    db.sponsor_ad_batches.unshift(batch)
+    db.sponsor_ad_posts.unshift(...createdPosts)
+    writeDb(db)
+
+    return summarizeSponsorAdBatches(
+      [batch],
+      db.projects,
+      db.project_settings,
+      createdPosts,
+    )[0]
+  },
+
+  async updateSponsorAdBatchStatus(
+    batchId: string,
+    status: SponsorAdBatchStatus,
+  ): Promise<SponsorAdBatch> {
+    const db = readDb()
+    const batch = db.sponsor_ad_batches.find((item) => item.id === batchId)
+
+    if (!batch) {
+      throw new Error('Batch Ads non trovato')
+    }
+
+    batch.status = status
+    batch.updated_at = now()
+    writeDb(db)
+
+    return batch
+  },
+
+  async deleteSponsorAdBatch(batchId: string): Promise<void> {
+    const db = readDb()
+    db.sponsor_ad_batches = db.sponsor_ad_batches.filter(
+      (batch) => batch.id !== batchId,
+    )
+    db.sponsor_ad_posts = db.sponsor_ad_posts.filter(
+      (post) => post.batch_id !== batchId,
+    )
     writeDb(db)
   },
 }

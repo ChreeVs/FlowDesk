@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LogIn,
   LogOut,
+  Megaphone,
   Menu,
   MessageCircle,
   Settings,
@@ -40,6 +41,7 @@ import { ProjectPage } from './pages/ProjectPage'
 import { ProjectSettingsPage } from './pages/ProjectSettingsPage'
 import { RequestsPage } from './pages/RequestsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { SponsorAdsPage } from './pages/SponsorAdsPage'
 import { SocialPlannerPage } from './pages/SocialPlannerPage'
 import type { AppNotification, ProjectSummary } from './types'
 
@@ -75,6 +77,12 @@ const tourSteps: TourStep[] = [
     title: 'Social planner',
     description:
       'Prepara post Facebook e Instagram, collegandoli al progetto corretto prima della pubblicazione.',
+  },
+  {
+    selector: '[data-tour="sponsorads"]',
+    title: 'SponsorAds',
+    description:
+      'Prepara batch di sponsorizzazioni da post pubblicati e salva gli export operativi per Meta Ads.',
   },
   {
     selector: '[data-tour="notifications"]',
@@ -113,6 +121,9 @@ type Route =
       name: 'social'
     }
   | {
+      name: 'sponsorads'
+    }
+  | {
       name: 'project'
       id: string
     }
@@ -144,6 +155,7 @@ const routePaths: Record<StaticRouteName, string> = {
   calendar: '/calendario',
   requests: '/richieste',
   social: '/social',
+  sponsorads: '/sponsorads',
   guide: '/guida',
   settings: '/impostazioni',
 }
@@ -212,6 +224,10 @@ const readRoute = (): Route => {
 
   if (pathname === routePaths.social || pathname === '/programmazione-social') {
     return { name: 'social' }
+  }
+
+  if (pathname === routePaths.sponsorads || pathname === '/ads') {
+    return { name: 'sponsorads' }
   }
 
   if (
@@ -462,6 +478,10 @@ function App() {
       return <SocialPlannerPage />
     }
 
+    if (route.name === 'sponsorads') {
+      return <SponsorAdsPage />
+    }
+
     return (
       <Dashboard
         showHints={preferences.showHints}
@@ -619,6 +639,15 @@ function App() {
                 >
                   <Share2 size={16} />
                   Social
+                </button>
+                <button
+                  className={privateRoute.name === 'sponsorads' ? 'active' : ''}
+                  type="button"
+                  data-tour="sponsorads"
+                  onClick={() => navigate({ name: 'sponsorads' })}
+                >
+                  <Megaphone size={16} />
+                  SponsorAds
                 </button>
                 <button
                   type="button"
