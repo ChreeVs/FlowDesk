@@ -79,6 +79,7 @@ Deno.serve(async (request) => {
     const appId = requireEnv('META_SOCIAL_APP_ID')
     const redirectUri = requireEnv('META_SOCIAL_REDIRECT_URI')
     const graphVersion = Deno.env.get('META_GRAPH_VERSION') ?? 'v25.0'
+    const loginConfigId = Deno.env.get('META_SOCIAL_LOGIN_CONFIG_ID')?.trim()
     const scopes = (Deno.env.get('META_SOCIAL_SCOPES') ?? defaultScopes.join(','))
       .split(',')
       .map((scope) => scope.trim())
@@ -128,7 +129,13 @@ Deno.serve(async (request) => {
     url.searchParams.set('redirect_uri', redirectUri)
     url.searchParams.set('response_type', 'code')
     url.searchParams.set('state', state)
-    url.searchParams.set('scope', scopes.join(','))
+    url.searchParams.set('auth_type', 'rerequest')
+
+    if (loginConfigId) {
+      url.searchParams.set('config_id', loginConfigId)
+    } else {
+      url.searchParams.set('scope', scopes.join(','))
+    }
 
     return json({ url: url.toString() })
   } catch (error) {
