@@ -904,6 +904,7 @@ main {
 }
 
 .sidebar-footer {
+  position: relative;
   display: grid;
   gap: 10px;
 }
@@ -919,14 +920,32 @@ main {
 
 .sidebar-account {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding: 10px;
   border-top: 1px solid var(--border);
 }
 
-.sidebar-account > span {
+.account-menu-trigger {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  min-height: 42px;
+  padding: 4px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.account-menu-trigger:hover {
+  background: var(--accent-soft);
+  border-color: var(--border);
+}
+
+.account-menu-trigger > span {
   display: inline-grid;
   width: 34px;
   height: 34px;
@@ -936,6 +955,10 @@ main {
   color: var(--warning);
   font-size: 11px;
   font-weight: 800;
+}
+
+.account-menu-trigger > div {
+  min-width: 0;
 }
 
 .sidebar-account strong,
@@ -955,6 +978,42 @@ main {
   margin-top: 2px;
   color: var(--muted);
   font-size: 11px;
+}
+
+.account-menu {
+  position: absolute;
+  right: 10px;
+  bottom: calc(100% + 8px);
+  left: 10px;
+  z-index: 40;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.account-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 9px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+  text-align: left;
+}
+
+.account-menu button:hover {
+  border-color: var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .workspace-main {

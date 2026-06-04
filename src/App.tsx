@@ -1,8 +1,8 @@
 import {
   Bell,
-  BookOpen,
   CalendarDays,
   ChevronDown,
+  CircleHelp,
   Database,
   FolderKanban,
   Inbox,
@@ -263,6 +263,7 @@ function App() {
   const [authOpen, setAuthOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [sidebarProjects, setSidebarProjects] = useState<ProjectSummary[]>([])
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -314,6 +315,7 @@ function App() {
     setRoute(next)
     setSidebarOpen(false)
     setProjectSwitcherOpen(false)
+    setAccountMenuOpen(false)
     setNotificationsOpen(false)
   }
 
@@ -413,6 +415,7 @@ function App() {
     }
 
     await supabase.auth.signOut()
+    setAccountMenuOpen(false)
     navigate({ name: 'landing' })
   }
 
@@ -557,7 +560,11 @@ function App() {
                       <button
                         className="project-switcher-trigger"
                         type="button"
-                        onClick={() => setProjectSwitcherOpen((open) => !open)}
+                        onClick={() => {
+                          setProjectSwitcherOpen((open) => !open)
+                          setAccountMenuOpen(false)
+                          setNotificationsOpen(false)
+                        }}
                       >
                         <span>{activeProject?.name ?? 'Progetti'}</span>
                         <ChevronDown size={13} />
@@ -649,41 +656,6 @@ function App() {
                   <Megaphone size={16} />
                   SponsorAds
                 </button>
-                <button
-                  type="button"
-                  data-tour="projects"
-                  onClick={() => navigate({ name: 'dashboard' })}
-                >
-                  <FolderKanban size={16} />
-                  Progetti
-                </button>
-                <button
-                  className={privateRoute.name === 'guide' ? 'active' : ''}
-                  type="button"
-                  data-tour="guide"
-                  onClick={() => navigate({ name: 'guide' })}
-                >
-                  <BookOpen size={16} />
-                  Guida
-                </button>
-                <button
-                  className={privateRoute.name === 'admin' ? 'active' : ''}
-                  type="button"
-                  data-tour="admin"
-                  onClick={() => navigate({ name: 'admin' })}
-                >
-                  <UserRoundCog size={16} />
-                  Admin
-                </button>
-                <button
-                  className={privateRoute.name === 'settings' ? 'active' : ''}
-                  type="button"
-                  data-tour="settings"
-                  onClick={() => navigate({ name: 'settings' })}
-                >
-                  <Settings size={16} />
-                  Impostazioni
-                </button>
               </nav>
             </div>
 
@@ -694,11 +666,47 @@ function App() {
               </span>
               {session ? (
                 <div className="sidebar-account">
-                  <span>{getAccountName(session).slice(0, 2).toUpperCase()}</span>
-                  <div>
-                    <strong>{getAccountName(session)}</strong>
-                    <small>{session.user.email}</small>
-                  </div>
+                  <button
+                    className="account-menu-trigger"
+                    type="button"
+                    aria-expanded={accountMenuOpen}
+                    onClick={() => {
+                      setAccountMenuOpen((open) => !open)
+                      setNotificationsOpen(false)
+                      setProjectSwitcherOpen(false)
+                    }}
+                  >
+                    <span>{getAccountName(session).slice(0, 2).toUpperCase()}</span>
+                    <div>
+                      <strong>{getAccountName(session)}</strong>
+                      <small>{session.user.email}</small>
+                    </div>
+                  </button>
+                  {accountMenuOpen ? (
+                    <div className="account-menu">
+                      <button
+                        type="button"
+                        onClick={() => navigate({ name: 'guide' })}
+                      >
+                        <CircleHelp size={15} />
+                        Guida
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate({ name: 'admin' })}
+                      >
+                        <UserRoundCog size={15} />
+                        Admin
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate({ name: 'settings' })}
+                      >
+                        <Settings size={15} />
+                        Impostazioni
+                      </button>
+                    </div>
+                  ) : null}
                   <button
                     className="icon-button ghost"
                     type="button"
@@ -728,6 +736,15 @@ function App() {
                 <button
                   className="topbar-icon"
                   type="button"
+                  title="Guida"
+                  data-tour="guide"
+                  onClick={() => navigate({ name: 'guide' })}
+                >
+                  <CircleHelp size={19} />
+                </button>
+                <button
+                  className="topbar-icon"
+                  type="button"
                   title="Assistenza"
                   data-tour="support"
                 >
@@ -741,6 +758,8 @@ function App() {
                   onClick={() => {
                     void loadNotifications()
                     setNotificationsOpen((open) => !open)
+                    setAccountMenuOpen(false)
+                    setProjectSwitcherOpen(false)
                   }}
                 >
                   <Bell size={19} />
