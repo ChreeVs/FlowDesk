@@ -20,8 +20,6 @@ export const getErrorMessage = (error: unknown) => {
       message.includes('client_requests_status_check') ||
       message.includes('relation "public.client_requests" does not exist') ||
       message.includes('relation "public.client_request_updates" does not exist') ||
-      message.includes('relation "public.sponsor_ad_batches" does not exist') ||
-      message.includes('relation "public.sponsor_ad_posts" does not exist') ||
       message.includes('relation "public.meta_connections" does not exist') ||
       message.includes('relation "public.meta_pages" does not exist') ||
       message.includes('relation "public.meta_instagram_accounts" does not exist') ||
