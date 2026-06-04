@@ -1,6 +1,16 @@
-import { CalendarClock, FolderKanban, Plus, Share2, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  CalendarClock,
+  FolderKanban,
+  Plus,
+  RefreshCw,
+  Share2,
+  Trash2,
+  Unlink,
+} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import { metaApi } from '../lib/meta'
+import type { MetaSocialStatus } from '../lib/meta'
 import { repository } from '../lib/repository'
 import type {
   ProjectSummary,
@@ -31,26 +41,6 @@ const statusLabels: Record<SocialPostStatus, string> = {
   failed: 'Errore',
 }
 
-const SOCIAL_CONNECTIONS_KEY = 'flowdesk-social-connections-v1'
-
-const readConnectedPlatforms = (): SocialPlatform[] => {
-  const raw = localStorage.getItem(SOCIAL_CONNECTIONS_KEY)
-
-  if (!raw) {
-    return []
-  }
-
-  try {
-    const value = JSON.parse(raw) as SocialPlatform[]
-
-    return value.filter((platform) =>
-      ['facebook', 'instagram'].includes(platform),
-    )
-  } catch {
-    return []
-  }
-}
-
 const togglePlatform = (
   platforms: SocialPlatform[],
   platform: SocialPlatform,
@@ -69,16 +59,51 @@ export function SocialPlannerPage() {
     'facebook',
     'instagram',
   ])
-  const [connectedPlatforms, setConnectedPlatforms] = useState<SocialPlatform[]>(
-    readConnectedPlatforms,
-  )
+  const [metaStatus, setMetaStatus] = useState<MetaSocialStatus>({
+    connected: false,
+    pages: [],
+    instagram_accounts: [],
+  })
   const [scheduledAt, setScheduledAt] = useState(defaultScheduleInput)
   const [loading, setLoading] = useState(true)
+  const [metaLoading, setMetaLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const connectedPlatforms = useMemo<SocialPlatform[]>(() => {
+    const next: SocialPlatform[] = []
+
+    if (metaStatus.connected && metaStatus.pages.length > 0) {
+      next.push('facebook')
+    }
+
+    if (metaStatus.connected && metaStatus.instagram_accounts.length > 0) {
+      next.push('instagram')
+    }
+
+    return next
+  }, [metaStatus])
   const selectedConnectedPlatforms = platforms.filter((platform) =>
     connectedPlatforms.includes(platform),
   )
+
+  const loadMetaStatus = useCallback(async () => {
+    setMetaLoading(true)
+
+    try {
+      setMetaStatus(await metaApi.getSocialStatus())
+    } catch (statusError) {
+      setError(getErrorMessage(statusError))
+      setMetaStatus({
+        connected: false,
+        pages: [],
+        instagram_accounts: [],
+      })
+    } finally {
+      setMetaLoading(false)
+    }
+  }, [])
 
   const loadPosts = useCallback(async () => {
     setLoading(true)
@@ -102,6 +127,25 @@ export function SocialPlannerPage() {
   useEffect(() => {
     void loadPosts()
   }, [loadPosts])
+
+  useEffect(() => {
+    void loadMetaStatus()
+  }, [loadMetaStatus])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const meta = params.get('meta')
+    const metaMessage = params.get('message')
+
+    if (meta === 'connected') {
+      setMessage('Meta Social collegato.')
+      void loadMetaStatus()
+    }
+
+    if (meta === 'error') {
+      setError(metaMessage || 'Connessione Meta non riuscita.')
+    }
+  }, [loadMetaStatus])
 
   const createPost = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -145,13 +189,38 @@ export function SocialPlannerPage() {
     }
   }
 
-  const connectPlatform = (platform: SocialPlatform) => {
-    setConnectedPlatforms((current) => {
-      const next = current.includes(platform) ? current : [...current, platform]
-      localStorage.setItem(SOCIAL_CONNECTIONS_KEY, JSON.stringify(next))
+  const connectMeta = async () => {
+    setConnecting(true)
+    setError(null)
+    setMessage(null)
 
-      return next
-    })
+    try {
+      const { url } = await metaApi.startSocialOAuth()
+      window.location.href = url
+    } catch (connectError) {
+      setError(getErrorMessage(connectError))
+      setConnecting(false)
+    }
+  }
+
+  const disconnectMeta = async () => {
+    setConnecting(true)
+    setError(null)
+    setMessage(null)
+
+    try {
+      await metaApi.disconnectSocial()
+      setMetaStatus({
+        connected: false,
+        pages: [],
+        instagram_accounts: [],
+      })
+      setMessage('Connessione Meta rimossa.')
+    } catch (disconnectError) {
+      setError(getErrorMessage(disconnectError))
+    } finally {
+      setConnecting(false)
+    }
   }
 
   const deletePost = async (postId: string) => {
@@ -175,25 +244,31 @@ export function SocialPlannerPage() {
       </div>
 
       {error ? <div className="notice error">{error}</div> : null}
+      {message ? <div className="notice">{message}</div> : null}
 
       <section className="dashboard-section social-panel">
-        {connectedPlatforms.length === 0 ? (
+        {metaLoading ? (
+          <div className="notice">Controllo connessione Meta...</div>
+        ) : !metaStatus.connected ? (
           <div className="social-connect">
             <span>
               <Share2 size={20} />
             </span>
             <div>
-              <h2>Collega un canale per iniziare</h2>
+              <h2>Collega Meta Social per iniziare</h2>
               <p>
-                Prima di programmare contenuti devi collegare almeno un canale.
-                La connessione OAuth Meta reale va completata lato server.
+                FlowDesk usera Facebook Login per leggere le pagine collegate e
+                gli account Instagram professionali disponibili sul tuo account.
+                Il token resta nel backend Supabase, non nel browser.
               </p>
               <div>
-                <button type="button" onClick={() => connectPlatform('facebook')}>
-                  Collega Facebook
-                </button>
-                <button type="button" onClick={() => connectPlatform('instagram')}>
-                  Collega Instagram
+                <button
+                  type="button"
+                  disabled={connecting}
+                  onClick={() => void connectMeta()}
+                >
+                  <Share2 size={16} />
+                  {connecting ? 'Collegamento...' : 'Collega Facebook / Instagram'}
                 </button>
               </div>
             </div>
@@ -203,14 +278,88 @@ export function SocialPlannerPage() {
             <div className="section-heading">
               <div>
                 <Share2 size={18} />
-                <h2>Nuovo contenuto</h2>
+                <h2>Meta Social collegato</h2>
               </div>
               <span className="section-meta">
-                {connectedPlatforms.join(' + ')}
+                {metaStatus.meta_user_name || 'Account Meta'}
               </span>
             </div>
 
-            <form className="social-form" onSubmit={createPost}>
+            <div className="meta-source-grid">
+              <div>
+                <strong>Pagine Facebook</strong>
+                {metaStatus.pages.length === 0 ? (
+                  <p>Nessuna pagina leggibile con questi permessi.</p>
+                ) : (
+                  <ul>
+                    {metaStatus.pages.map((page) => (
+                      <li key={page.page_id}>
+                        <span>{page.page_name || page.page_id}</span>
+                        {page.instagram_username ? (
+                          <small>IG collegato: @{page.instagram_username}</small>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <strong>Account Instagram</strong>
+                {metaStatus.instagram_accounts.length === 0 ? (
+                  <p>Nessun account Instagram professionale collegato.</p>
+                ) : (
+                  <ul>
+                    {metaStatus.instagram_accounts.map((account) => (
+                      <li key={account.instagram_user_id}>
+                        <span>
+                          @{account.username || account.instagram_user_id}
+                        </span>
+                        <small>{account.page_name || 'Pagina collegata'}</small>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="social-connection-actions">
+              <button
+                type="button"
+                disabled={connecting}
+                onClick={() => void loadMetaStatus()}
+              >
+                <RefreshCw size={15} />
+                Aggiorna
+              </button>
+              <button
+                type="button"
+                disabled={connecting}
+                onClick={() => void disconnectMeta()}
+              >
+                <Unlink size={15} />
+                Disconnetti
+              </button>
+            </div>
+
+            {connectedPlatforms.length === 0 ? (
+              <div className="notice">
+                Meta risulta collegato, ma non sono state trovate pagine
+                Facebook o account Instagram pubblicabili. Controlla permessi,
+                ruolo sulla pagina e collegamento Instagram professionale.
+              </div>
+            ) : (
+              <>
+                <div className="section-heading social-compose-heading">
+                  <div>
+                    <Plus size={18} />
+                    <h2>Nuovo contenuto</h2>
+                  </div>
+                  <span className="section-meta">
+                    {connectedPlatforms.join(' + ')}
+                  </span>
+                </div>
+
+                <form className="social-form" onSubmit={createPost}>
           <div className="form-row two">
             <select
               value={projectId}
@@ -274,7 +423,9 @@ export function SocialPlannerPage() {
             <Plus size={17} />
             Programma
           </button>
-            </form>
+                </form>
+              </>
+            )}
           </>
         )}
       </section>

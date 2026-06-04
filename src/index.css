@@ -2400,6 +2400,85 @@ button,
   gap: 10px;
 }
 
+.meta-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.meta-source-grid > div {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.meta-source-grid strong {
+  font-size: 13px;
+}
+
+.meta-source-grid p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.meta-source-grid ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.meta-source-grid li {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.meta-source-grid li span,
+.meta-source-grid li small {
+  overflow-wrap: anywhere;
+}
+
+.meta-source-grid li span {
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.meta-source-grid li small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.social-connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.social-connection-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 760;
+}
+
+.social-compose-heading {
+  margin-top: 4px;
+}
+
 .social-form textarea {
   min-height: 120px;
 }
@@ -2972,6 +3051,10 @@ button,
 }
 
 .social-connect button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-height: 38px;
   padding: 0 12px;
   border-color: var(--accent);
@@ -3503,6 +3586,10 @@ button,
   .calendar-item,
   .social-item {
     grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .meta-source-grid {
+    grid-template-columns: 1fr;
   }
 
   .calendar-item time,
