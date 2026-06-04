@@ -178,6 +178,9 @@ create table if not exists public.sponsor_ad_posts (
   platform text not null check (platform in ('facebook', 'instagram')),
   source_post_id text not null,
   source_label text not null default '',
+  source_account_id text not null default '',
+  source_page_id text not null default '',
+  instagram_account_id text not null default '',
   post_text text not null default '',
   permalink_url text not null default '',
   thumbnail_url text not null default '',
@@ -224,6 +227,15 @@ alter table public.calendar_notes
 alter table public.profiles
   add column if not exists role text not null default 'user'
   check (role in ('user', 'admin'));
+
+alter table public.sponsor_ad_posts
+  add column if not exists source_account_id text not null default '';
+
+alter table public.sponsor_ad_posts
+  add column if not exists source_page_id text not null default '';
+
+alter table public.sponsor_ad_posts
+  add column if not exists instagram_account_id text not null default '';
 
 alter table public.client_requests
   drop constraint if exists client_requests_status_check;

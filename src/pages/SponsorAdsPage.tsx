@@ -26,6 +26,9 @@ type QueuePost = Pick<
   | 'platform'
   | 'source_post_id'
   | 'source_label'
+  | 'source_account_id'
+  | 'source_page_id'
+  | 'instagram_account_id'
   | 'post_text'
   | 'permalink_url'
   | 'thumbnail_url'
@@ -72,6 +75,7 @@ const toPublishedIso = (value: string) =>
 const exportPayload = (batch: SponsorAdBatchSummary) => ({
   batch_name: batch.name,
   project_name: batch.project_name,
+  source: 'meta_published_posts',
   create_active: batch.create_active,
   ad_account_name: batch.ad_account_name || null,
   ad_account_id: batch.ad_account_id || null,
@@ -87,10 +91,19 @@ const exportPayload = (batch: SponsorAdBatchSummary) => ({
   ads_to_create: batch.posts.map((post) => ({
     platform: post.platform,
     ad_name: post.ad_name,
-    source_post_id:
+    source_post_id: post.source_post_id,
+    object_story_id:
       post.platform === 'facebook' ? post.source_post_id : null,
+    page_id:
+      post.platform === 'facebook'
+        ? post.source_account_id || batch.source_id || null
+        : post.source_page_id || null,
     instagram_media_id:
       post.platform === 'instagram' ? post.source_post_id : null,
+    instagram_account_id:
+      post.platform === 'instagram'
+        ? post.instagram_account_id || post.source_account_id || batch.source_id || null
+        : null,
     source_label: post.source_label || null,
     permalink_url: post.permalink_url || null,
     post_text: post.post_text,
@@ -106,6 +119,7 @@ export function SponsorAdsPage() {
   const [adAccountId, setAdAccountId] = useState('')
   const [sourceName, setSourceName] = useState('')
   const [sourceId, setSourceId] = useState('')
+  const [sourcePageId, setSourcePageId] = useState('')
   const [campaignName, setCampaignName] = useState('')
   const [campaignId, setCampaignId] = useState('')
   const [adsetName, setAdsetName] = useState('')
@@ -162,18 +176,34 @@ export function SponsorAdsPage() {
   }, [batchName, selectedProject])
 
   const addPost = () => {
-    if (!postText.trim() && !postId.trim()) {
+    const cleanedPostId = postId.trim()
+    const cleanedSourceId = sourceId.trim()
+    const cleanedPageId = sourcePageId.trim()
+
+    if (!cleanedPostId) {
+      setError("Inserisci l'ID del post pubblicato su Meta.")
+      return
+    }
+
+    if (postPlatform === 'instagram' && (!cleanedSourceId || !cleanedPageId)) {
+      setError(
+        'Per Instagram servono ID account Instagram e ID pagina Facebook collegata.',
+      )
       return
     }
 
     const sourceLabel = sourceName.trim() || selectedProject?.name || ''
-    const text = postText.trim() || postId.trim()
+    const text = postText.trim() || cleanedPostId
+    setError(null)
     setQueue((current) => [
       ...current,
       {
         platform: postPlatform,
-        source_post_id: postId.trim() || `manual-${current.length + 1}`,
+        source_post_id: cleanedPostId,
         source_label: sourceLabel,
+        source_account_id: cleanedSourceId,
+        source_page_id: postPlatform === 'instagram' ? cleanedPageId : '',
+        instagram_account_id: postPlatform === 'instagram' ? cleanedSourceId : '',
         post_text: text,
         permalink_url: postUrl.trim(),
         thumbnail_url: postThumb.trim(),
@@ -307,8 +337,8 @@ export function SponsorAdsPage() {
           <p className="eyebrow">Meta ads workflow</p>
           <h1>SponsorAds</h1>
           <p>
-            Prepara batch di sponsorizzazioni da post Facebook e Instagram,
-            collegandoli ai progetti FlowDesk.
+            Inserisci post gia pubblicati dalle pagine Facebook e Instagram
+            collegate al tuo account Meta dentro campagne e gruppi inserzioni.
           </p>
         </div>
       </div>
@@ -320,10 +350,11 @@ export function SponsorAdsPage() {
         <div>
           <h2>Connessione Meta</h2>
           <p>
-            Il vecchio SponsorAds usa OAuth Facebook e Marketing API lato
-            server. Qui prepari e salvi i batch; la pubblicazione reale va
-            collegata con una Edge Function Supabase, senza esporre token nel
-            frontend.
+            SponsorAds non usa i post creati in FlowDesk. Il flusso corretto
+            legge post esistenti da pagine Facebook e account Instagram
+            collegati, poi crea inserzioni nella campagna scelta. In questa
+            versione FlowDesk salva il batch e l'export; l'import automatico e
+            la pubblicazione reale passano da Edge Function Supabase e Meta API.
           </p>
         </div>
       </section>
@@ -390,22 +421,31 @@ export function SponsorAdsPage() {
 
           <div className="form-row two">
             <label>
-              Fonte post
+              Fonte Meta collegata
               <input
                 value={sourceName}
-                placeholder="Pagina o profilo Instagram"
+                placeholder="Pagina Facebook o account Instagram"
                 onChange={(event) => setSourceName(event.target.value)}
               />
             </label>
             <label>
-              ID fonte
+              ID fonte Meta
               <input
                 value={sourceId}
-                placeholder="ID pagina / IG"
+                placeholder="Page ID o Instagram User ID"
                 onChange={(event) => setSourceId(event.target.value)}
               />
             </label>
           </div>
+
+          <label>
+            Pagina Facebook collegata (solo Instagram)
+            <input
+              value={sourcePageId}
+              placeholder="Page ID collegata all'account Instagram"
+              onChange={(event) => setSourcePageId(event.target.value)}
+            />
+          </label>
         </section>
 
         <section className="dashboard-section sponsor-card">
@@ -500,26 +540,47 @@ export function SponsorAdsPage() {
             <span className="section-meta">{queue.length} in lista</span>
           </div>
 
+          <div className="sponsor-import-note">
+            <strong>Libreria post Meta</strong>
+            <p>
+              Qui vanno selezionati o incollati solo post gia pubblicati sulle
+              pagine Facebook/Instagram collegate. Quando OAuth Meta sara
+              attivo, questa sezione mostrera la libreria reale dei post.
+            </p>
+          </div>
+
           <div className="sponsor-post-form">
             <div className="form-row two">
-              <select
-                value={postPlatform}
-                onChange={(event) =>
-                  setPostPlatform(event.target.value as AdsPlatform)
-                }
-              >
-                <option value="facebook">Facebook</option>
-                <option value="instagram">Instagram</option>
-              </select>
-              <input
-                value={postId}
-                placeholder="ID post o media"
-                onChange={(event) => setPostId(event.target.value)}
-              />
+              <label>
+                Piattaforma
+                <select
+                  value={postPlatform}
+                  onChange={(event) =>
+                    setPostPlatform(event.target.value as AdsPlatform)
+                  }
+                >
+                  <option value="facebook">Facebook</option>
+                  <option value="instagram">Instagram</option>
+                </select>
+              </label>
+              <label>
+                {postPlatform === 'facebook'
+                  ? 'Object story ID / ID post Facebook'
+                  : 'Instagram media ID'}
+                <input
+                  value={postId}
+                  placeholder={
+                    postPlatform === 'facebook'
+                      ? 'Es. pageid_postid'
+                      : 'Es. 179...'
+                  }
+                  onChange={(event) => setPostId(event.target.value)}
+                />
+              </label>
             </div>
             <textarea
               value={postText}
-              placeholder="Testo/caption del post pubblicato"
+              placeholder="Caption/testo del post pubblicato"
               onChange={(event) => setPostText(event.target.value)}
             />
             <div className="form-row two">
@@ -541,14 +602,14 @@ export function SponsorAdsPage() {
             />
             <button type="button" onClick={addPost}>
               <Plus size={16} />
-              Inserisci nella lista
+              Aggiungi post pubblicato
             </button>
           </div>
 
           {queue.length === 0 ? (
             <div className="empty-state compact-empty">
               <Megaphone size={24} />
-              <p>Inserisci qui i post da sponsorizzare.</p>
+              <p>Aggiungi alla lista i post Meta gia pubblicati.</p>
             </div>
           ) : (
             <div className="sponsor-queue">
@@ -557,7 +618,14 @@ export function SponsorAdsPage() {
                   <span>{platformLabels[post.platform]}</span>
                   <div>
                     <strong>{post.post_text}</strong>
-                    <small>{post.source_post_id}</small>
+                    <small>
+                      Meta post: {post.source_post_id}
+                      {post.platform === 'instagram'
+                        ? ` | IG: ${post.instagram_account_id} | Pagina: ${post.source_page_id}`
+                        : post.source_account_id
+                          ? ` | Pagina: ${post.source_account_id}`
+                          : ''}
+                    </small>
                     <input
                       value={post.ad_name}
                       aria-label="Nome inserzione"
@@ -594,7 +662,7 @@ export function SponsorAdsPage() {
               }
             >
               <CheckCircle2 size={16} />
-              Salva batch
+              Salva batch Meta
             </button>
           </div>
         </section>
@@ -631,7 +699,7 @@ export function SponsorAdsPage() {
                   </small>
                   <div className="social-tags">
                     <span>{statusLabels[batch.status]}</span>
-                    <span>{batch.posts.length} post</span>
+                    <span>{batch.posts.length} post Meta</span>
                     <span>{batch.create_active ? 'Attive' : 'In pausa'}</span>
                   </div>
                 </div>

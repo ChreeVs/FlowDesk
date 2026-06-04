@@ -150,6 +150,9 @@ export type SponsorAdPost = {
   platform: AdsPlatform
   source_post_id: string
   source_label: string
+  source_account_id: string
+  source_page_id: string
+  instagram_account_id: string
   post_text: string
   permalink_url: string
   thumbnail_url: string

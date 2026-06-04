@@ -68,6 +68,9 @@ type SponsorAdPostPatch = Pick<
   | 'platform'
   | 'source_post_id'
   | 'source_label'
+  | 'source_account_id'
+  | 'source_page_id'
+  | 'instagram_account_id'
   | 'post_text'
   | 'permalink_url'
   | 'thumbnail_url'
@@ -1221,6 +1224,9 @@ const supabaseRepository = {
             platform: post.platform,
             source_post_id: post.source_post_id.trim(),
             source_label: post.source_label.trim(),
+            source_account_id: post.source_account_id.trim(),
+            source_page_id: post.source_page_id.trim(),
+            instagram_account_id: post.instagram_account_id.trim(),
             post_text: post.post_text.trim(),
             permalink_url: post.permalink_url.trim(),
             thumbnail_url: post.thumbnail_url.trim(),
@@ -1941,6 +1947,9 @@ const localRepository = {
       platform: post.platform,
       source_post_id: post.source_post_id.trim(),
       source_label: post.source_label.trim(),
+      source_account_id: post.source_account_id.trim(),
+      source_page_id: post.source_page_id.trim(),
+      instagram_account_id: post.instagram_account_id.trim(),
       post_text: post.post_text.trim(),
       permalink_url: post.permalink_url.trim(),
       thumbnail_url: post.thumbnail_url.trim(),
